@@ -18,11 +18,8 @@ Full implementations land in EPIC-AI-03 (infer) and EPIC-AI-04 (generate_smart_d
 
 from __future__ import annotations
 
-import time
-
 from urolens_ai.schemas.inference import InferenceResult
 from urolens_ai.schemas.smart_diagnosis import SmartDiagnosisOutput
-from urolens_ai.utils.exceptions import InferenceError, RuleEngineError
 from urolens_ai.utils.logging import get_logger
 
 logger = get_logger(__name__)
