@@ -1,0 +1,242 @@
+"""
+tests/unit/test_yolo_engine.py
+------------------------------
+Unit tests for urolens_ai.inference.yolo_engine.
+
+The real YOLOv8 model is never loaded in unit tests — the YOLO class is
+mocked in every test. This keeps unit tests fast and GPU-free.
+
+Coverage target: ≥ 80% branch coverage on yolo_engine.py
+"""
+
+from __future__ import annotations
+
+from unittest.mock import MagicMock, patch
+
+import numpy as np
+import pytest
+
+from urolens_ai.inference.yolo_engine import Detection, YOLOEngine, get_engine, reset_engine
+from urolens_ai.utils.exceptions import InferenceError
+
+
+# ---------------------------------------------------------------------------
+# Helpers — build mock YOLO results
+# ---------------------------------------------------------------------------
+
+
+def _make_mock_box(
+    class_id: int,
+    class_name: str,
+    confidence: float,
+    bbox: tuple[float, float, float, float] = (10.0, 20.0, 50.0, 60.0),
+) -> MagicMock:
+    """Create a mock Ultralytics box object."""
+    box = MagicMock()
+    box.cls = [MagicMock()]
+    box.cls[0].item.return_value = class_id
+    box.conf = [MagicMock()]
+    box.conf[0].item.return_value = confidence
+    box.xyxy = [MagicMock()]
+    box.xyxy[0].tolist.return_value = list(bbox)
+    return box
+
+
+def _make_mock_result(
+    boxes: list[MagicMock],
+    names: dict[int, str],
+) -> MagicMock:
+    """Create a mock Ultralytics result object."""
+    result = MagicMock()
+    result.boxes = boxes
+    result.names = names
+    return result
+
+
+def _make_engine_with_mock_model(mock_model: MagicMock) -> YOLOEngine:
+    """Create a YOLOEngine with a pre-loaded mock model, bypassing _load_model."""
+    with patch("urolens_ai.inference.yolo_engine.Path") as mock_path:
+        mock_path.return_value.exists.return_value = True
+        with patch("urolens_ai.inference.yolo_engine.YOLO", return_value=mock_model):
+            engine = YOLOEngine(
+                model_path="fake/weights.pt",
+                conf=0.45,
+                iou=0.5,
+            )
+    return engine
+
+
+# ---------------------------------------------------------------------------
+# YOLOEngine — model loading
+# ---------------------------------------------------------------------------
+
+
+class TestYOLOEngineLoading:
+    def test_load_failure_missing_file_raises(self) -> None:
+        """Missing weights file must raise InferenceError(code='MODEL_NOT_LOADED')."""
+        with patch("urolens_ai.inference.yolo_engine.Path") as mock_path:
+            mock_path.return_value.exists.return_value = False
+            with pytest.raises(InferenceError) as exc_info:
+                YOLOEngine(model_path="nonexistent/weights.pt", conf=0.45, iou=0.5)
+        assert exc_info.value.code == "MODEL_NOT_LOADED"
+
+    def test_load_failure_ultralytics_error_raises(self) -> None:
+        """Ultralytics error during load must raise InferenceError(code='MODEL_NOT_LOADED')."""
+        with patch("urolens_ai.inference.yolo_engine.Path") as mock_path:
+            mock_path.return_value.exists.return_value = True
+            with patch(
+                "urolens_ai.inference.yolo_engine.YOLO",
+                side_effect=RuntimeError("corrupt weights"),
+            ):
+                with pytest.raises(InferenceError) as exc_info:
+                    YOLOEngine(model_path="fake/weights.pt", conf=0.45, iou=0.5)
+        assert exc_info.value.code == "MODEL_NOT_LOADED"
+        assert "corrupt weights" in exc_info.value.message
+
+    def test_successful_load(self) -> None:
+        """Engine must load without error when weights file exists."""
+        mock_model = MagicMock()
+        with patch("urolens_ai.inference.yolo_engine.Path") as mock_path:
+            mock_path.return_value.exists.return_value = True
+            with patch("urolens_ai.inference.yolo_engine.YOLO", return_value=mock_model):
+                engine = YOLOEngine(model_path="fake/weights.pt", conf=0.45, iou=0.5)
+        assert engine.model is mock_model
+
+
+# ---------------------------------------------------------------------------
+# YOLOEngine — inference
+# ---------------------------------------------------------------------------
+
+
+class TestYOLOEngineRun:
+    def test_returns_list_of_detections(self) -> None:
+        """run() must return a list of Detection objects."""
+        mock_model = MagicMock()
+        names = {0: "erythrocytes", 1: "leukocytes"}
+        boxes = [_make_mock_box(0, "erythrocytes", 0.85)]
+        mock_model.predict.return_value = [_make_mock_result(boxes, names)]
+
+        engine = _make_engine_with_mock_model(mock_model)
+        result = engine.run(np.zeros((480, 640, 3), dtype=np.float32))
+
+        assert isinstance(result, list)
+        assert len(result) == 1
+        assert isinstance(result[0], Detection)
+
+    def test_detection_fields_mapped_correctly(self) -> None:
+        """Detection fields must match the mock box values."""
+        mock_model = MagicMock()
+        names = {0: "erythrocytes"}
+        boxes = [_make_mock_box(0, "erythrocytes", 0.85, (10.0, 20.0, 50.0, 60.0))]
+        mock_model.predict.return_value = [_make_mock_result(boxes, names)]
+
+        engine = _make_engine_with_mock_model(mock_model)
+        detections = engine.run(np.zeros((480, 640, 3), dtype=np.float32))
+
+        d = detections[0]
+        assert d.class_id == 0
+        assert d.class_name == "erythrocytes"
+        assert d.confidence == pytest.approx(0.85) # type: ignore
+        assert d.bbox == (10.0, 20.0, 50.0, 60.0)
+
+    def test_multiple_detections_returned(self) -> None:
+        """run() must return all detections above the confidence threshold."""
+        mock_model = MagicMock()
+        names = {0: "erythrocytes", 1: "leukocytes"}
+        boxes = [
+            _make_mock_box(0, "erythrocytes", 0.85),
+            _make_mock_box(0, "erythrocytes", 0.72),
+            _make_mock_box(1, "leukocytes", 0.91),
+        ]
+        mock_model.predict.return_value = [_make_mock_result(boxes, names)]
+
+        engine = _make_engine_with_mock_model(mock_model)
+        detections = engine.run(np.zeros((480, 640, 3), dtype=np.float32))
+
+        assert len(detections) == 3
+
+    def test_no_detections_returns_empty_list(self) -> None:
+        """run() must return an empty list when no particles are detected."""
+        mock_model = MagicMock()
+        mock_model.predict.return_value = [_make_mock_result([], {})]
+
+        engine = _make_engine_with_mock_model(mock_model)
+        detections = engine.run(np.zeros((480, 640, 3), dtype=np.float32))
+
+        assert detections == []
+
+    def test_none_boxes_returns_empty_list(self) -> None:
+        """run() must handle result.boxes=None without error."""
+        mock_model = MagicMock()
+        result = MagicMock()
+        result.boxes = None
+        mock_model.predict.return_value = [result]
+
+        engine = _make_engine_with_mock_model(mock_model)
+        detections = engine.run(np.zeros((480, 640, 3), dtype=np.float32))
+
+        assert detections == []
+
+    def test_inference_runtime_error_raises(self) -> None:
+        """Runtime error during predict() must raise InferenceError(code='INFERENCE_FAILED')."""
+        mock_model = MagicMock()
+        mock_model.predict.side_effect = RuntimeError("CUDA out of memory")
+
+        engine = _make_engine_with_mock_model(mock_model)
+        with pytest.raises(InferenceError) as exc_info:
+            engine.run(np.zeros((480, 640, 3), dtype=np.float32))
+
+        assert exc_info.value.code == "INFERENCE_FAILED"
+        assert "CUDA out of memory" in exc_info.value.message
+
+    def test_predict_called_with_correct_thresholds(self) -> None:
+        """run() must pass conf and iou thresholds to model.predict()."""
+        mock_model = MagicMock()
+        mock_model.predict.return_value = [_make_mock_result([], {})]
+
+        engine = _make_engine_with_mock_model(mock_model)
+        engine.run(np.zeros((480, 640, 3), dtype=np.float32))
+
+        call_kwargs = mock_model.predict.call_args.kwargs
+        assert call_kwargs["conf"] == 0.45
+        assert call_kwargs["iou"] == 0.5
+
+
+# ---------------------------------------------------------------------------
+# get_engine() singleton
+# ---------------------------------------------------------------------------
+
+
+class TestGetEngine:
+    def test_returns_same_instance_on_repeated_calls(self) -> None:
+        """get_engine() must return the same instance every time."""
+
+        mock_model = MagicMock()
+        # Reset singleton for test isolation
+        reset_engine()
+
+        with patch("urolens_ai.inference.yolo_engine.Path") as mock_path:
+            mock_path.return_value.exists.return_value = True
+            with patch(
+                "urolens_ai.inference.yolo_engine.YOLO", return_value=mock_model
+            ):
+                first = get_engine()
+                second = get_engine()
+
+        assert first is second
+
+        # Clean up singleton after test
+        reset_engine()
+
+    def test_missing_weights_raises_on_first_call(self) -> None:
+        """get_engine() must raise InferenceError if weights are missing."""
+
+        reset_engine()  # Ensure singleton is reset before test
+
+        with patch("urolens_ai.inference.yolo_engine.Path") as mock_path:
+            mock_path.return_value.exists.return_value = False
+            with pytest.raises(InferenceError) as exc_info:
+                get_engine()
+
+        assert exc_info.value.code == "MODEL_NOT_LOADED"
+        reset_engine()  # Clean up singleton after test
