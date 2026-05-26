@@ -1,0 +1,16 @@
+{
+  "_description": "Classification contains only particle keys that are not referenced by any condition rule (bacteria, leukocytes, yeast). Rule engine must silently ignore unknown keys. All conditions return LOW with score 0.0 and no_significant_indicators=True.",
+  "_expected": {
+    "gout": {"level": "LOW", "weighted_score": 0.0, "evidence": []},
+    "glomerulonephritis": {"level": "LOW", "weighted_score": 0.0, "evidence": []},
+    "nephrolithiasis": {"level": "LOW", "weighted_score": 0.0, "evidence": []},
+    "no_significant_indicators": true
+  },
+  "classification": {
+    "bacteria": 50,
+    "leukocytes": 30,
+    "yeast": 10,
+    "mucus_threads": 5,
+    "sperm_cells": 2
+  }
+}
