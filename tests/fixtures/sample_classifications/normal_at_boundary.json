@@ -1,0 +1,14 @@
+{
+  "_description": "Particle counts at exactly their normal_range_max values. No excess — all conditions LOW, no_significant_indicators=True. Validates boundary-inclusive logic (detected_count == normal_range_max does NOT contribute to score).",
+  "_expected": {
+    "gout": {"level": "LOW", "weighted_score": 0.0, "evidence": []},
+    "glomerulonephritis": {"level": "LOW", "weighted_score": 0.0, "evidence": []},
+    "nephrolithiasis": {"level": "LOW", "weighted_score": 0.0, "evidence": []},
+    "no_significant_indicators": true
+  },
+  "classification": {
+    "crystals": 5,
+    "erythrocytes": 3,
+    "urinary_casts": 0
+  }
+}
