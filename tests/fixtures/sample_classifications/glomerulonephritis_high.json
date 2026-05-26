@@ -1,0 +1,57 @@
+{
+    "_description": "Very elevated urinary casts and erythrocytes. GN score = (25-0)*0.4 + (5-3)*0.2 = 10.0 + 0.4 = 10.4 >= high_min(10.0) => HIGH. Gout and Nephrolithiasis are LOW — no crystals present.",
+    "_expected": {
+        "gout": {
+            "level": "LOW",
+            "weighted_score": 0.0,
+            "evidence": []
+        },
+        "glomerulonephritis": {
+            "level": "HIGH",
+            "weighted_score": 10.4,
+            "evidence": [
+                {
+                    "particle_name": "urinary_casts",
+                    "detected_count": 25,
+                    "normal_range_max": 0,
+                    "contribution_weight": 0.4,
+                    "contribution_score": 10.0,
+                    "contribution_role": "primary"
+                },
+                {
+                    "particle_name": "erythrocytes",
+                    "detected_count": 5,
+                    "normal_range_max": 3,
+                    "contribution_weight": 0.2,
+                    "contribution_score": 0.4,
+                    "contribution_role": "supporting"
+                }
+            ]
+        },
+        "nephrolithiasis": {
+            "level": "LOW",
+            "weighted_score": 0.2,
+            "evidence": [
+                {
+                    "particle_name": "erythrocytes",
+                    "detected_count": 5,
+                    "normal_range_max": 3,
+                    "contribution_weight": 0.1,
+                    "contribution_score": 0.2,
+                    "contribution_role": "primary"
+                }
+            ]
+        },
+        "no_significant_indicators": false
+    },
+    "_score_derivation": {
+        "gout": "no crystals",
+        "glomerulonephritis": "urinary_casts: (25-0)*0.4=10.0, erythrocytes: (5-3)*0.2=0.4 => total 10.4",
+        "nephrolithiasis": "erythrocytes: (5-3)*0.1=0.2 — below evidence_min_count=2 check (erythrocytes=5 >= 2 BUT score only 0.2, level=LOW)"
+    },
+    "classification": {
+        "crystals": 0,
+        "erythrocytes": 5,
+        "urinary_casts": 25
+    }
+}
