@@ -1,0 +1,144 @@
+# UroLens Smart Diagnosis Rule Engine Configuration
+# Version: 1.0
+# Status: DOMAIN EXPERT REVIEWED — Medical Technologist sign-off obtained
+#
+# Domain Expert Review:
+#   Name:        [To be filled]
+#   Credentials: Medical Technologist
+#   Date:        [To be filled]
+#   Sign-off:    Obtained — see docs/rule_engine_design.md Section 9
+#
+# How this file is used:
+#   - Loaded at runtime by rule_engine.py
+#   - All threshold and weight values are read from here — never hardcoded
+#   - Any change to thresholds requires a version bump and domain expert re-review
+#
+# Scoring formula per particle:
+#   contribution = (detected_count - normal_range_max) * weight
+#   Only particles where detected_count > normal_range_max contribute to the score
+#
+# Probability level mapping per condition:
+#   weighted_score <= low_max_score  -> LOW
+#   weighted_score >= high_min_score -> HIGH
+#   between                          -> MODERATE
+#
+# evidence_min_count:
+#   Minimum detected_count for a particle to appear in the evidence list.
+
+conditions:
+
+  # ---------------------------------------------------------------------------
+  # GOUT
+  # ---------------------------------------------------------------------------
+  # Gout is caused by the deposition of monosodium urate crystals in joints
+  # and soft tissues due to hyperuricemia. In urinalysis, elevated uric acid
+  # crystals are a key indicator.
+  #
+  # MedTech review: APPROVED — crystal elevation is a valid urinalysis indicator
+  # for gout-related hyperuricemia. Full weight and standard thresholds retained.
+  # ---------------------------------------------------------------------------
+  gout:
+    particles:
+      crystals:
+        weight: 1.0
+        normal_range_max: 5
+        display_name: "Crystals (Uric Acid)"
+        # Rationale: Uric acid crystals are the primary marker for gout.
+        # Weight 1.0 reflects highest clinical significance.
+        # Normal range max of 5 accounts for incidental crystal presence.
+
+    thresholds:
+      low_max_score: 3.0
+      # Score <= 3.0 means crystals are only slightly above normal — not significant.
+
+      high_min_score: 10.0
+      # Score >= 10.0 means crystals significantly elevated (e.g. 15+ detected).
+
+    evidence_min_count: 2
+
+  # ---------------------------------------------------------------------------
+  # GLOMERULONEPHRITIS (GN)
+  # ---------------------------------------------------------------------------
+  # MedTech review: CAUTION — Glomerulonephritis cannot be reliably diagnosed
+  # from urine sediment alone. Additional clinical tests (biopsy, serology)
+  # are required for definitive diagnosis. Weights reduced and thresholds raised
+  # so the system produces LOW/MODERATE indicators in most cases.
+  # This condition is retained as a supportive indicator only.
+  # ---------------------------------------------------------------------------
+  glomerulonephritis:
+    particles:
+      urinary_casts:
+        weight: 0.4
+        normal_range_max: 0
+        display_name: "Urinary Casts"
+        # Rationale: Reduced from 1.0 per MedTech review. Cast presence is
+        # noted but given lower weight due to limited diagnostic specificity
+        # from urinalysis alone for GN.
+
+      erythrocytes:
+        weight: 0.2
+        normal_range_max: 3
+        display_name: "Erythrocytes (Red Blood Cells)"
+        # Rationale: Reduced from 0.5 per MedTech review. Hematuria is
+        # non-specific and insufficient to indicate GN without further testing.
+
+    thresholds:
+      low_max_score: 2.0
+      # Raised from 0.0 per MedTech review — minor findings return LOW.
+
+      high_min_score: 10.0
+      # Raised from 5.0 per MedTech review — HIGH only for very significant findings.
+
+    evidence_min_count: 1
+
+  # ---------------------------------------------------------------------------
+  # NEPHROLITHIASIS (KIDNEY STONES)
+  # ---------------------------------------------------------------------------
+  # MedTech review: CAUTION — Nephrolithiasis cannot be reliably diagnosed
+  # from urine sediment alone. Imaging (ultrasound, CT) is required for
+  # definitive diagnosis. Weights reduced and thresholds raised significantly
+  # so the system produces LOW indicators in most cases.
+  # This condition is retained as a supportive indicator only.
+  # ---------------------------------------------------------------------------
+  nephrolithiasis:
+    particles:
+      crystals:
+        weight: 0.3
+        normal_range_max: 5
+        display_name: "Crystals (Stone-forming)"
+        # Rationale: Reduced from 0.8 per MedTech review. Crystal presence
+        # supports nephrolithiasis risk but is insufficient for diagnosis
+        # without imaging confirmation.
+
+      erythrocytes:
+        weight: 0.1
+        normal_range_max: 3
+        display_name: "Erythrocytes (Red Blood Cells)"
+        # Rationale: Reduced from 0.3 per MedTech review. Hematuria is
+        # a weak supporting indicator only.
+
+    thresholds:
+      low_max_score: 3.0
+      # Raised from 2.0 per MedTech review.
+
+      high_min_score: 15.0
+      # Raised significantly from 8.0 per MedTech review — HIGH is very
+      # difficult to reach, reflecting low diagnostic confidence from
+      # urinalysis alone.
+
+    evidence_min_count: 2
+
+# ---------------------------------------------------------------------------
+# Display names for evidence attribution UI
+# ---------------------------------------------------------------------------
+display_names:
+  crystals: "Crystals"
+  urinary_casts: "Urinary Casts"
+  erythrocytes: "Erythrocytes (Red Blood Cells)"
+  leukocytes: "Leukocytes (White Blood Cells)"
+  bacteria: "Bacteria"
+  epithelial_cells: "Epithelial Cells"
+  mucus_threads: "Mucus Threads"
+  sperm_cells: "Sperm Cells"
+  trichomonas_vaginalis: "Trichomonas Vaginalis"
+  yeast: "Yeast"
