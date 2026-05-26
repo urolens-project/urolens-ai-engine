@@ -1,0 +1,21 @@
+{
+  "_description": "All particle counts strictly within normal range. Expects all conditions LOW, no_significant_indicators=True.",
+  "_expected": {
+    "gout": {"level": "LOW", "weighted_score": 0.0, "evidence": []},
+    "glomerulonephritis": {"level": "LOW", "weighted_score": 0.0, "evidence": []},
+    "nephrolithiasis": {"level": "LOW", "weighted_score": 0.0, "evidence": []},
+    "no_significant_indicators": true
+  },
+  "classification": {
+    "bacteria": 0,
+    "crystals": 1,
+    "epithelial_cells": 2,
+    "erythrocytes": 1,
+    "leukocytes": 2,
+    "mucus_threads": 0,
+    "sperm_cells": 0,
+    "trichomonas_vaginalis": 0,
+    "urinary_casts": 0,
+    "yeast": 0
+  }
+}

@@ -26,7 +26,8 @@ from urolens_ai.inference.preprocessing import normalise, validate_image
 from urolens_ai.inference.yolo_engine import get_engine
 from urolens_ai.schemas.inference import InferenceResult
 from urolens_ai.schemas.smart_diagnosis import SmartDiagnosisOutput
-from urolens_ai.utils.exceptions import InferenceError
+from urolens_ai.smart_diagnosis.rule_engine import run_rule_engine
+from urolens_ai.utils.exceptions import InferenceError, RuleEngineError
 from urolens_ai.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -135,14 +136,43 @@ def generate_smart_diagnosis(classification: dict[str, int]) -> SmartDiagnosisOu
     RuleEngineError
         code="INVALID_CLASSIFICATION", "CONFIG_ERROR", or "RULE_EVALUATION_FAILED".
     """
-    logger.debug(
-        "generate_smart_diagnosis_called",
-        extra={"particle_count": len(classification)},
+
+    # Validate input type — classification must be a dict
+    if not isinstance(classification, dict): # type: ignore[arg-type]
+        raise RuleEngineError(
+            code="INVALID_CLASSIFICATION",
+            message=(
+                f"classification must be a dict[str, int], "
+                f"got {type(classification).__name__}."
+            ),
+        )
+
+    # Validate all values are non-negative integers
+    for key, value in classification.items():
+        if not isinstance(value, int) or value < 0: # type: ignore[arg-type]
+            raise RuleEngineError(
+                code="INVALID_CLASSIFICATION",
+                message=(
+                    f"All classification values must be non-negative integers. "
+                    f"Invalid value for '{key}': {value!r}."
+                ),
+            )
+
+    start = time.perf_counter()
+
+    result = run_rule_engine(classification)
+
+    elapsed_ms = (time.perf_counter() - start) * 1000
+
+    logger.info(
+        "generate_smart_diagnosis_completed",
+        extra={
+            "gout_level": result.gout.level.value,
+            "glomerulonephritis_level": result.glomerulonephritis.level.value,
+            "nephrolithiasis_level": result.nephrolithiasis.level.value,
+            "no_significant_indicators": result.no_significant_indicators,
+            "duration_ms": round(elapsed_ms, 2),
+        },
     )
-    # STUB — Full implementation lands in STORY-AI-07, STORY-AI-08,
-    # and STORY-AI-09 (Sprints 7–8).
-    raise NotImplementedError(
-        "generate_smart_diagnosis() is not yet implemented. "
-        "Full implementation lands in STORY-AI-07, STORY-AI-08, and STORY-AI-09 "
-        "(Sprints 7–8)."
-    )
+
+    return result
