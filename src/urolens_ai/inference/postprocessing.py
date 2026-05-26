@@ -60,8 +60,9 @@ def map_detections(
     confidences: dict[str, list[float]] = defaultdict(list)
 
     for detection in detections:
-        counts[detection.class_name] += 1
-        confidences[detection.class_name].append(detection.confidence)
+        particle_name = detection.class_name.replace("-", "_")
+        counts[particle_name] += 1
+        confidences[particle_name].append(detection.confidence)
 
     # Compute mean confidence per class
     particles: dict[str, int] = dict(counts)
