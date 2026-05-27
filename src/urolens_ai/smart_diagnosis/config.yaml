@@ -48,11 +48,11 @@ conditions:
         # Normal range max of 5 accounts for incidental crystal presence.
 
     thresholds:
-      low_max_score: 3.0
-      # Score <= 3.0 means crystals are only slightly above normal — not significant.
+      low_max_score: 2.0
+      # Score <= 2.0 means crystals are only slightly above normal — not significant.
 
-      high_min_score: 10.0
-      # Score >= 10.0 means crystals significantly elevated (e.g. 15+ detected).
+      high_min_score: 50.0
+      # Score >= 50.0 means crystals significantly elevated (e.g. 15+ detected).
 
     evidence_min_count: 2
 
@@ -83,10 +83,10 @@ conditions:
         # non-specific and insufficient to indicate GN without further testing.
 
     thresholds:
-      low_max_score: 2.0
+      low_max_score: 3.0
       # Raised from 0.0 per MedTech review — minor findings return LOW.
 
-      high_min_score: 10.0
+      high_min_score: 35.0
       # Raised from 5.0 per MedTech review — HIGH only for very significant findings.
 
     evidence_min_count: 1
@@ -121,7 +121,7 @@ conditions:
       low_max_score: 3.0
       # Raised from 2.0 per MedTech review.
 
-      high_min_score: 15.0
+      high_min_score: 35.0
       # Raised significantly from 8.0 per MedTech review — HIGH is very
       # difficult to reach, reflecting low diagnostic confidence from
       # urinalysis alone.
