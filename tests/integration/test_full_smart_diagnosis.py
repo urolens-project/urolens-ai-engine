@@ -241,9 +241,9 @@ class TestNoSignificantIndicators:
         assert result.nephrolithiasis.weighted_score == pytest.approx(0.0)  # type: ignore[union-attr]
 
     def test_no_significant_indicators_false_when_any_condition_not_low(self) -> None:
-        """no_significant_indicators must be False if any condition is not LOW."""
         result = generate_smart_diagnosis({"crystals": 20})
-        assert result.gout.level == ProbabilityLevel.HIGH
+        # (20-5)*1.0 = 15.0, low_max=2.0, high_min=50.0 => MODERATE
+        assert result.gout.level == ProbabilityLevel.MODERATE  # not HIGH anymore
         assert result.no_significant_indicators is False
 
 
@@ -253,40 +253,30 @@ class TestNoSignificantIndicators:
 
 
 class TestGoutScoring:
-    """Gout condition: crystals weight=1.0, normal_range_max=5, low_max=3.0, high_min=10.0."""
+    """Gout condition: crystals weight=1.0, normal_range_max=5, low_max=2.0, high_min=50.0."""
 
     def test_gout_low_boundary_score_equals_low_max(self) -> None:
-        """
-        Boundary: weighted_score == low_max_score (3.0) must return LOW.
-        crystals=8 => (8-5)*1.0 = 3.0 exactly.
-        compute_level uses <=, so exactly 3.0 is LOW.
-        """
-        result = generate_smart_diagnosis({"crystals": 8})
-        assert result.gout.weighted_score == pytest.approx(3.0, rel=1e-6)  # type: ignore[union-attr]
+        # crystals=7 => (7-5)*1.0 = 2.0 == low_max(2.0) => LOW
+        result = generate_smart_diagnosis({"crystals": 7})
+        assert result.gout.weighted_score == pytest.approx(2.0, rel=1e-6) # type: ignore[union-attr]
         assert result.gout.level == ProbabilityLevel.LOW
 
     def test_gout_moderate_just_above_low_max(self) -> None:
-        """
-        crystals=9 => (9-5)*1.0 = 4.0 — above low_max(3.0), below high_min(10.0).
-        """
-        result = generate_smart_diagnosis({"crystals": 9})
-        assert result.gout.weighted_score == pytest.approx(4.0, rel=1e-6)  # type: ignore[union-attr]
+        # crystals=8 => (8-5)*1.0 = 3.0 > low_max(2.0), < high_min(50.0) => MODERATE
+        result = generate_smart_diagnosis({"crystals": 8})
+        assert result.gout.weighted_score == pytest.approx(3.0, rel=1e-6) # type: ignore[union-attr]
         assert result.gout.level == ProbabilityLevel.MODERATE
 
     def test_gout_high_boundary_score_equals_high_min(self) -> None:
-        """
-        Boundary: weighted_score == high_min_score (10.0) must return HIGH.
-        crystals=15 => (15-5)*1.0 = 10.0.
-        compute_level uses >=, so exactly 10.0 is HIGH.
-        """
-        result = generate_smart_diagnosis({"crystals": 15})
-        assert result.gout.weighted_score == pytest.approx(10.0, rel=1e-6) # type: ignore[union-attr]
+        # crystals=55 => (55-5)*1.0 = 50.0 == high_min(50.0) => HIGH
+        result = generate_smart_diagnosis({"crystals": 55})
+        assert result.gout.weighted_score == pytest.approx(50.0, rel=1e-6) # type: ignore[union-attr]
         assert result.gout.level == ProbabilityLevel.HIGH
 
     def test_gout_high_well_above_threshold(self) -> None:
-        """crystals=20 => (20-5)*1.0 = 15.0 => HIGH."""
-        result = generate_smart_diagnosis({"crystals": 20})
-        assert result.gout.weighted_score == pytest.approx(15.0, rel=1e-6) # type: ignore[union-attr]
+        # crystals=60 => (60-5)*1.0 = 55.0 => HIGH
+        result = generate_smart_diagnosis({"crystals": 60})
+        assert result.gout.weighted_score == pytest.approx(55.0, rel=1e-6) # type: ignore[union-attr]
         assert result.gout.level == ProbabilityLevel.HIGH
 
     def test_gout_evidence_present_when_crystals_exceed_evidence_min_count(self) -> None:
@@ -335,7 +325,7 @@ class TestGoutScoring:
 class TestGlomerulonephritisScoring:
     """
     GN: urinary_casts weight=0.4 (max=0), erythrocytes weight=0.2 (max=3).
-    low_max=2.0, high_min=10.0, evidence_min_count=1.
+    low_max=3.0, high_min=35.0, evidence_min_count=1.
     """
 
     def test_gn_low_when_all_within_range(self) -> None:
@@ -345,36 +335,37 @@ class TestGlomerulonephritisScoring:
 
     def test_gn_low_boundary_at_low_max(self) -> None:
         """
-        urinary_casts=5 => 5*0.4=2.0 == low_max(2.0) => LOW (inclusive).
+        erythrocytes=18 => (18-3)*0.2=3.0 == low_max(3.0) => LOW (inclusive).
         """
-        result = generate_smart_diagnosis({"urinary_casts": 5, "erythrocytes": 0})
-        assert result.glomerulonephritis.weighted_score == pytest.approx(2.0, rel=1e-6) # type: ignore[union-attr]
+        result = generate_smart_diagnosis({"urinary_casts": 0, "erythrocytes": 18})
+        assert result.glomerulonephritis.weighted_score == pytest.approx(3.0, rel=1e-6) # type: ignore[union-attr]
         assert result.glomerulonephritis.level == ProbabilityLevel.LOW
 
     def test_gn_moderate_urinary_casts_and_erythrocytes(self) -> None:
         """
-        urinary_casts=3, erythrocytes=8:
-          casts: (3-0)*0.4=1.2, rbc: (8-3)*0.2=1.0 => total 2.2 => MODERATE.
+        urinary_casts=8, erythrocytes=8:
+          casts: (8-0)*0.4=3.2, rbc: (8-3)*0.2=1.0 => total 4.2 => MODERATE.
         """
-        result = generate_smart_diagnosis({"urinary_casts": 3, "erythrocytes": 8})
-        assert result.glomerulonephritis.weighted_score == pytest.approx(2.2, rel=1e-6) # type: ignore[union-attr]
+        result = generate_smart_diagnosis({"urinary_casts": 8, "erythrocytes": 8})
+        assert result.glomerulonephritis.weighted_score == pytest.approx(4.2, rel=1e-6) # type: ignore[union-attr]
         assert result.glomerulonephritis.level == ProbabilityLevel.MODERATE
 
     def test_gn_high_boundary_at_high_min(self) -> None:
         """
-        urinary_casts=25 => 25*0.4=10.0 == high_min(10.0) => HIGH (inclusive).
+        urinary_casts=85, erythrocytes=8:
+          casts: 85*0.4=34.0, rbc: (8-3)*0.2=1.0 => 35.0 == high_min(35.0) => HIGH (inclusive).
         """
-        result = generate_smart_diagnosis({"urinary_casts": 25, "erythrocytes": 0})
-        assert result.glomerulonephritis.weighted_score == pytest.approx(10.0, rel=1e-6) # type: ignore[union-attr]
+        result = generate_smart_diagnosis({"urinary_casts": 85, "erythrocytes": 8})
+        assert result.glomerulonephritis.weighted_score == pytest.approx(35.0, rel=1e-6) # type: ignore[union-attr]
         assert result.glomerulonephritis.level == ProbabilityLevel.HIGH
 
     def test_gn_high_casts_and_erythrocytes(self) -> None:
         """
-        urinary_casts=25, erythrocytes=5:
-          casts: 10.0, rbc: (5-3)*0.2=0.4 => total 10.4 => HIGH.
+        urinary_casts=80, erythrocytes=20:
+          casts: 32.0, rbc: (20-3)*0.2=3.4 => total 35.4 => HIGH.
         """
-        result = generate_smart_diagnosis({"urinary_casts": 25, "erythrocytes": 5})
-        assert result.glomerulonephritis.weighted_score == pytest.approx(10.4, rel=1e-6) # type: ignore[union-attr]
+        result = generate_smart_diagnosis({"urinary_casts": 80, "erythrocytes": 20})
+        assert result.glomerulonephritis.weighted_score == pytest.approx(35.4, rel=1e-6) # type: ignore[union-attr]
         assert result.glomerulonephritis.level == ProbabilityLevel.HIGH
 
     def test_gn_evidence_primary_is_highest_contributor(self) -> None:
@@ -409,7 +400,7 @@ class TestGlomerulonephritisScoring:
 class TestNephrolithiasisScoring:
     """
     Nephro: crystals weight=0.3 (max=5), erythrocytes weight=0.1 (max=3).
-    low_max=3.0, high_min=15.0, evidence_min_count=2.
+    low_max=3.0, high_min=35.0, evidence_min_count=2.
     """
 
     def test_nephro_low_when_all_within_range(self) -> None:
@@ -421,7 +412,7 @@ class TestNephrolithiasisScoring:
         """
         crystals=20, erythrocytes=10:
           crystals: (20-5)*0.3=4.5, rbc: (10-3)*0.1=0.7 => total 5.2.
-          5.2 between low_max(3.0) and high_min(15.0) => MODERATE.
+          5.2 between low_max(3.0) and high_min(35.0) => MODERATE.
         """
         result = generate_smart_diagnosis({"crystals": 20, "erythrocytes": 10})
         assert result.nephrolithiasis.weighted_score == pytest.approx(5.2, rel=1e-6) # type: ignore[union-attr]
@@ -429,11 +420,12 @@ class TestNephrolithiasisScoring:
 
     def test_nephro_high_boundary_at_high_min(self) -> None:
         """
-        high_min=15.0 is very hard to reach from crystals alone.
-        crystals: 55 => (55-5)*0.3=15.0 exactly => HIGH.
+        high_min=35.0 is very hard to reach, by design.
+        crystals=120, erythrocytes=8:
+          crystals: (120-5)*0.3=34.5, rbc: (8-3)*0.1=0.5 => 35.0 == high_min => HIGH (inclusive).
         """
-        result = generate_smart_diagnosis({"crystals": 55})
-        assert result.nephrolithiasis.weighted_score == pytest.approx(15.0, rel=1e-6) # type: ignore[union-attr]
+        result = generate_smart_diagnosis({"crystals": 120, "erythrocytes": 8})
+        assert result.nephrolithiasis.weighted_score == pytest.approx(35.0, rel=1e-6) # type: ignore[union-attr]
         assert result.nephrolithiasis.level == ProbabilityLevel.HIGH
 
     def test_nephro_evidence_sorted_by_contribution_descending(self) -> None:

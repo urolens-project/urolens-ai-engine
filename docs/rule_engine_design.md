@@ -73,11 +73,41 @@ between                           -> MODERATE
 
 ### 4.3 Threshold Values
 
+> **`src/urolens_ai/smart_diagnosis/config.yaml` is the single source of truth.**
+> This table is a copy for readers and must be updated alongside it. The values
+> below were verified against config.yaml as of commit `2926b49`.
+
 | Condition | low_max | high_min | Normal Range Max | Evidence Min Count |
 |---|---|---|---|---|
-| Gout | 3.0 | 10.0 | crystals: 5 | 2 |
-| Glomerulonephritis | 2.0 | 10.0 | urinary_casts: 0, erythrocytes: 3 | 1 |
-| Nephrolithiasis | 3.0 | 15.0 | crystals: 5, erythrocytes: 3 | 2 |
+| Gout | 2.0 | 50.0 | crystals: 5 | 2 |
+| Glomerulonephritis | 3.0 | 35.0 | urinary_casts: 0, erythrocytes: 3 | 1 |
+| Nephrolithiasis | 3.0 | 35.0 | crystals: 5, erythrocytes: 3 | 2 |
+
+An earlier revision of this table listed Gout as 3.0/10.0, Glomerulonephritis as
+2.0/10.0 and Nephrolithiasis as 3.0/15.0. Those values predated commit `2926b49`,
+which raised every `high_min_score` per MedTech review, and the Gout and
+Glomerulonephritis `low_max` values were additionally transposed. Anything derived
+from the old table -- including draft paper appendices -- should be regenerated.
+
+### 4.3.1 Known limitation: the HIGH band is effectively unreachable
+
+Replaying the current configuration over 3,592 annotated fields produced:
+
+| Condition | Fields reaching HIGH | Note |
+|---|---|---|
+| Gout | **0.0%** | needs 55+ crystals in one field; the maximum observed is 40 |
+| Glomerulonephritis | 0.3% | |
+| Nephrolithiasis | 0.2% | |
+
+Roughly 97% of fields return LOW for every condition. The thresholds were raised
+deliberately, and conservatism is correct for a screening aid -- but a band that
+*cannot* be reached is not conservatism, it is dead code in the score mapping. It
+also inflates any agreement metric computed against these levels, since predicting
+LOW unconditionally already scores ~97%.
+
+Re-derivation from observed score percentiles is pending MedTech re-review; see
+`scripts/evaluate.py`, which reports Cohen's kappa and the always-LOW baseline
+alongside raw agreement so this cannot be misread.
 
 ### 4.4 Threshold Rationale
 
@@ -86,6 +116,75 @@ between                           -> MODERATE
 | Gout | Standard thresholds retained — crystal elevation is a valid urinalysis indicator per MedTech review |
 | Glomerulonephritis | Thresholds raised significantly per MedTech review — GN cannot be reliably diagnosed from urinalysis alone. HIGH is very difficult to reach by design. |
 | Nephrolithiasis | Thresholds raised significantly per MedTech review — nephrolithiasis requires imaging for definitive diagnosis. System produces LOW in most cases. |
+
+---
+
+### 4.5 Literature Basis
+
+The weights and normal ranges below were set by MedTech consultation (Section 9).
+This section records the published sources that independently support them, so the
+justification is not "one reviewer said so" alone. This is literature grounding,
+not statistical validation -- no confirmed-diagnosis dataset exists yet, and a
+sensitivity/specificity study against one would be the stronger follow-up.
+
+#### Reference ranges
+
+- **Erythrocytes, `normal_range_max = 3`.** Normal urinary RBC is 0-3 per
+  high-power field. Matches the configured value exactly.
+  AAFP, *Urinalysis: A Comprehensive Review*, Am Fam Physician, 2005.
+  <https://www.aafp.org/pubs/afp/issues/2005/0315/p1153.html>
+- **Urinary casts, `normal_range_max = 0`.** Casts are absent or very rare in
+  normal urine. Same source.
+- **Leukocytes are deliberately not scored** by any condition. Pyuria indicates
+  infection, not gout, GN, or nephrolithiasis. This is an intentional exclusion,
+  not an oversight.
+
+#### Glomerulonephritis — why "supportive only" is the correct framing
+
+RBC and granular casts carry roughly **97% specificity but low sensitivity** for
+glomerular disease, appearing in only ~2.7% of biopsy-proven cases, and are not
+fully specific -- RBC casts are reported after exercise and in interstitial
+nephritis. High specificity means a positive finding is meaningful; low
+sensitivity means LOW or MODERATE rules nothing out. That is exactly the framing
+already encoded in the reduced weights and raised thresholds.
+Kudose et al., *Glomerular Hematuria and the Utility of Urine Microscopy*,
+Am J Kidney Dis, 2022.
+<https://www.ajkd.org/article/S0272-6386(22)00584-4/fulltext>
+
+#### Nephrolithiasis — why the erythrocyte weight stays low
+
+Hematuria is **~77% sensitive** for kidney stones overall, ranging 55-86% by stone
+location, and **up to 15% of confirmed stone patients show no hematuria at all**.
+This is a measured diagnostic-accuracy figure supporting `weight = 0.1`.
+StatPearls, *Renal Calculi, Nephrolithiasis*.
+<https://www.ncbi.nlm.nih.gov/books/NBK442014/>
+
+Crystal morphology can permit presumptive stone-type identification, but
+crystalluria without sub-typing is nonspecific -- which is the "crystal sub-typing
+not available" limitation in Section 7, now with a citation behind it.
+StatPearls, *Urinary Crystals Identification and Analysis*, 2023.
+<https://www.ncbi.nlm.nih.gov/books/NBK606103/>
+
+#### Gout
+
+Uric acid crystalluria marks hyperuricosuria and urinary supersaturation and
+correlates with, but does not prove, gout. Definitive diagnosis still requires
+joint fluid crystal analysis during an attack. Gout is the most clinically
+grounded of the three conditions here while still not being standalone-diagnostic.
+StatPearls, *Hyperuricemia*. <https://www.ncbi.nlm.nih.gov/books/NBK459218/>
+
+#### Comparable systems, for benchmarking
+
+| System | Classes | Reported | Source |
+|---|---|---|---|
+| YOLOv8 urine sediment detector | 11 | mAP 91% | Springer, 2023 |
+| YOLOv5 + GA hyperparameter search | 6 | mAP 85.8% (YOLOv5l) | ScienceDirect, 2023 |
+| Multi-head YOLOv12, self-supervised pretraining | 6 groups | -- | Sci Rep, 2025 |
+
+UroLens detects 10 classes, closest to the 11-class YOLOv8 study. **Any comparison
+against that 91% figure must use a leak-free measurement** -- see
+`docs/dataset_rebuild.md`. The pre-rebuild 0.843 mAP@50 is not a valid basis for
+comparison; the specimen-disjoint figure is 0.746.
 
 ---
 

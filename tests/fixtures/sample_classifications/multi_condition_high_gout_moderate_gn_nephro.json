@@ -1,30 +1,30 @@
 {
-  "_description": "Multiple conditions raised simultaneously. Crystals=15 drives Gout HIGH and Nephrolithiasis MODERATE. Elevated erythrocytes and urinary_casts drive GN MODERATE. Tests evidence sorting (primary/supporting roles) across conditions sharing a particle class.",
+  "_description": "Multiple conditions raised simultaneously. Crystals=55 drives Gout HIGH (score=50.0 == high_min) and Nephrolithiasis MODERATE (score=15.5). Elevated erythrocytes and urinary_casts drive GN MODERATE (score=4.2). Tests evidence sorting (primary/supporting roles) across conditions sharing a particle class. Thresholds reflect MedTech review.",
   "_expected": {
     "gout": {
       "level": "HIGH",
-      "weighted_score": 10.0,
+      "weighted_score": 50.0,
       "evidence": [
         {
           "particle_name": "crystals",
-          "detected_count": 15,
+          "detected_count": 55,
           "normal_range_max": 5,
           "contribution_weight": 1.0,
-          "contribution_score": 10.0,
+          "contribution_score": 50.0,
           "contribution_role": "primary"
         }
       ]
     },
     "glomerulonephritis": {
       "level": "MODERATE",
-      "weighted_score": 2.6,
+      "weighted_score": 4.2,
       "evidence": [
         {
           "particle_name": "urinary_casts",
-          "detected_count": 4,
+          "detected_count": 8,
           "normal_range_max": 0,
           "contribution_weight": 0.4,
-          "contribution_score": 1.6,
+          "contribution_score": 3.2,
           "contribution_role": "primary"
         },
         {
@@ -39,14 +39,14 @@
     },
     "nephrolithiasis": {
       "level": "MODERATE",
-      "weighted_score": 3.5,
+      "weighted_score": 15.5,
       "evidence": [
         {
           "particle_name": "crystals",
-          "detected_count": 15,
+          "detected_count": 55,
           "normal_range_max": 5,
           "contribution_weight": 0.3,
-          "contribution_score": 3.0,
+          "contribution_score": 15.0,
           "contribution_role": "primary"
         },
         {
@@ -62,13 +62,13 @@
     "no_significant_indicators": false
   },
   "_score_derivation": {
-    "gout": "crystals: (15-5)*1.0=10.0",
-    "glomerulonephritis": "urinary_casts: (4-0)*0.4=1.6, erythrocytes: (8-3)*0.2=1.0 => total 2.6",
-    "nephrolithiasis": "crystals: (15-5)*0.3=3.0, erythrocytes: (8-3)*0.1=0.5 => total 3.5"
+    "gout": "crystals: (55-5)*1.0=50.0",
+    "glomerulonephritis": "urinary_casts: (8-0)*0.4=3.2, erythrocytes: (8-3)*0.2=1.0 => total 4.2",
+    "nephrolithiasis": "crystals: (55-5)*0.3=15.0, erythrocytes: (8-3)*0.1=0.5 => total 15.5"
   },
   "classification": {
-    "crystals": 15,
+    "crystals": 55,
     "erythrocytes": 8,
-    "urinary_casts": 4
+    "urinary_casts": 8
   }
 }

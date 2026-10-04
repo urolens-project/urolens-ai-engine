@@ -36,7 +36,7 @@ _MODEL_WEIGHTS_PATH: str = os.environ.get(
     "src/urolens_ai/models/yolov8/best.pt",
 )
 _INFERENCE_CONF_THRESHOLD: float = float(
-    os.environ.get("INFERENCE_CONF_THRESHOLD", "0.45")
+    os.environ.get("INFERENCE_CONF_THRESHOLD", "0.35")
 )
 _INFERENCE_IOU_THRESHOLD: float = float(
     os.environ.get("INFERENCE_IOU_THRESHOLD", "0.5")
