@@ -1,31 +1,35 @@
 {
-  "_description": "Heavily elevated crystal count. Gout score = (20-5)*1.0 = 15.0 >= high_min_score(10.0) => HIGH. Nephrolithiasis score = (20-5)*0.3 = 4.5, between low_max(3.0) and high_min(15.0) => MODERATE. Demonstrates cross-condition scoring from a single particle class.",
+  "_description": "Heavily elevated crystal count. Gout score = (55-5)*1.0 = 50.0 >= high_min_score(50.0) => HIGH. Nephrolithiasis score = (55-5)*0.3 = 15.0, between low_max(3.0) and high_min(35.0) => MODERATE. Demonstrates cross-condition scoring from a single particle class. Thresholds reflect MedTech review: high_min raised to 50.0 for gout.",
   "_expected": {
     "gout": {
       "level": "HIGH",
-      "weighted_score": 15.0,
+      "weighted_score": 50.0,
       "evidence": [
         {
           "particle_name": "crystals",
-          "detected_count": 20,
+          "detected_count": 55,
           "normal_range_max": 5,
           "contribution_weight": 1.0,
-          "contribution_score": 15.0,
+          "contribution_score": 50.0,
           "contribution_role": "primary"
         }
       ]
     },
-    "glomerulonephritis": {"level": "LOW", "weighted_score": 0.0, "evidence": []},
+    "glomerulonephritis": {
+      "level": "LOW",
+      "weighted_score": 0.0,
+      "evidence": []
+    },
     "nephrolithiasis": {
       "level": "MODERATE",
-      "weighted_score": 4.5,
+      "weighted_score": 15.0,
       "evidence": [
         {
           "particle_name": "crystals",
-          "detected_count": 20,
+          "detected_count": 55,
           "normal_range_max": 5,
           "contribution_weight": 0.3,
-          "contribution_score": 4.5,
+          "contribution_score": 15.0,
           "contribution_role": "primary"
         }
       ]
@@ -33,12 +37,12 @@
     "no_significant_indicators": false
   },
   "_score_derivation": {
-    "gout": "crystals: (20-5)*1.0 = 15.0",
+    "gout": "crystals: (55-5)*1.0 = 50.0",
     "glomerulonephritis": "no relevant particles elevated",
-    "nephrolithiasis": "crystals: (20-5)*0.3 = 4.5"
+    "nephrolithiasis": "crystals: (55-5)*0.3 = 15.0"
   },
   "classification": {
-    "crystals": 20,
+    "crystals": 55,
     "erythrocytes": 0,
     "urinary_casts": 0
   }
