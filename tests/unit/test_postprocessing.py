@@ -72,7 +72,10 @@ class TestMapDetectionsCounts:
         assert particles["erythrocytes"] == 3
 
     def test_multiple_classes_counted_independently(self) -> None:
-        """Different classes must be counted independently."""
+        """
+        Different classes must be counted independently. YOLO emits dashed
+        class names; they must come out underscored to match the rule engine.
+        """
         detections = [
             _make_detection("erythrocytes", 0.85),
             _make_detection("erythrocytes", 0.72),
@@ -83,7 +86,8 @@ class TestMapDetectionsCounts:
         particles, _ = map_detections(detections)
         assert particles["erythrocytes"] == 2
         assert particles["leukocytes"] == 1
-        assert particles["urinary-casts"] == 2
+        assert particles["urinary_casts"] == 2
+        assert "urinary-casts" not in particles
 
     def test_only_detected_classes_in_output(self) -> None:
         """Classes with zero detections must not appear in output."""
