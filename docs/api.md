@@ -49,6 +49,8 @@ result.confidence_scores  # {"erythrocytes": 0.8341, "urinary-casts": 0.7102}
 | `ImageValidationError` | `CORRUPT_IMAGE` | Bytes are not a decodable image |
 | | `FORMAT_UNSUPPORTED` | Not JPEG or PNG; the detected format is in the message |
 | | `RESOLUTION_TOO_LOW` | Below 640 × 480; required and actual are in the message |
+| | `IMAGE_EXPOSURE` | Near-black or blown-out frame. Show "check the light and retake" |
+| | `NOT_MICROSCOPY` | Input gate says this is not a urine microscopy image (e.g. a selfie). Show "retake image" — never a result |
 | `InferenceError` | `MODEL_NOT_LOADED` | Weights missing or unreadable |
 | | `INFERENCE_FAILED` | Any other failure during detection |
 
@@ -164,6 +166,8 @@ until the process restarts (or `reset_engine()` is called).
 | `RULE_ENGINE_CONFIG_PATH` | `src/urolens_ai/smart_diagnosis/config.yaml` | |
 | `MIN_IMAGE_WIDTH` / `MIN_IMAGE_HEIGHT` | `640` / `480` | |
 | `ACCEPTED_IMAGE_FORMATS` | `JPEG,PNG` | |
+| `GATE_WEIGHTS_PATH` | `src/urolens_ai/models/gate/gate.pt` | Slide / not-slide classifier |
+| `GATE_MIN_SLIDE_PROB` | `0.43` | Highest cut-off that passes ≥99.9% of real test slides (`scripts/evaluate_gate.py`) |
 
 > **Confidence threshold — set this explicitly.** The code default and
 > `.env.example` both use `0.35`, chosen from measured count bias on the

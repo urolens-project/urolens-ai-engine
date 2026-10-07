@@ -161,3 +161,12 @@ class TestInferValidationFailures:
         with pytest.raises(ImageValidationError) as exc_info:
             infer(b"\x00\x01\x02\x03" * 50)
         assert exc_info.value.code == "CORRUPT_IMAGE"
+    def test_non_microscopy_photo_raises_not_microscopy(self) -> None:
+        """
+        A normal photo must be rejected by the input gate, not run through the
+        detector. Before the gate, a classroom selfie came back as "2 sperm cells".
+        """
+        image_bytes = Path("tests/fixtures/sample_images/not_microscopy_kitchen.jpg").read_bytes()
+        with pytest.raises(ImageValidationError) as exc_info:
+            infer(image_bytes)
+        assert exc_info.value.code == "NOT_MICROSCOPY"
