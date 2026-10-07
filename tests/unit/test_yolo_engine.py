@@ -201,6 +201,26 @@ class TestYOLOEngineRun:
         assert call_kwargs["conf"] == 0.45
         assert call_kwargs["iou"] == 0.5
 
+    def test_rgb_input_is_passed_to_model_as_bgr(self) -> None:
+        """
+        normalise() produces RGB, but Ultralytics treats numpy input as BGR.
+
+        Passing RGB straight through swaps red and blue for the model and cost
+        about 7 points of recall on the test split.
+        """
+        mock_model = MagicMock()
+        mock_model.predict.return_value = [_make_mock_result([], {})]
+        rgb = np.zeros((2, 2, 3), dtype=np.float32)
+        rgb[..., 0] = 200.0  # red channel only
+
+        engine = _make_engine_with_mock_model(mock_model)
+        engine.run(rgb)
+
+        sent = mock_model.predict.call_args.kwargs["source"]
+        assert sent[..., 2].min() == 200.0  # red now in BGR position 2
+        assert sent[..., 0].max() == 0.0
+        assert sent.flags["C_CONTIGUOUS"]
+
 
 # ---------------------------------------------------------------------------
 # get_engine() singleton
