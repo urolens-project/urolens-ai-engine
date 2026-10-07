@@ -21,6 +21,7 @@ import time
 
 from PIL import Image
 
+from urolens_ai.inference.input_gate import check_input
 from urolens_ai.inference.postprocessing import map_detections
 from urolens_ai.inference.preprocessing import normalise, validate_image
 from urolens_ai.inference.yolo_engine import get_engine
@@ -53,7 +54,8 @@ def infer(image_bytes: bytes) -> InferenceResult:
     Raises
     ------
     ImageValidationError
-        code="FORMAT_UNSUPPORTED", "RESOLUTION_TOO_LOW", or "CORRUPT_IMAGE".
+        code="FORMAT_UNSUPPORTED", "RESOLUTION_TOO_LOW", or "CORRUPT_IMAGE";
+        "IMAGE_EXPOSURE" or "NOT_MICROSCOPY" if the input gate rejects it.
     InferenceError
         code="MODEL_NOT_LOADED" or "INFERENCE_FAILED".
     """
@@ -70,7 +72,11 @@ def infer(image_bytes: bytes) -> InferenceResult:
     # Step 3 — Normalise to float32 RGB numpy array
     image_array = normalise(image_bytes)
 
-    # Step 4 — Run YOLOv8 inference
+    # Step 4 — Reject non-microscopy and unusable images before the detector,
+    # which would otherwise label *something* on any photo
+    check_input(image_array)
+
+    # Step 5 — Run YOLOv8 inference
     engine = get_engine()
 
     try:
@@ -89,7 +95,7 @@ def infer(image_bytes: bytes) -> InferenceResult:
 
     raw_detection_count = len(detections)
 
-    # Step 5 — Map detections to particle counts and confidence scores
+    # Step 6 — Map detections to particle counts and confidence scores
     particles, confidence_scores = map_detections(detections)
     filtered_detection_count = sum(particles.values())
 

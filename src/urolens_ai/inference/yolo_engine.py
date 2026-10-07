@@ -165,9 +165,14 @@ class YOLOEngine:
         logger.debug("inference_started", extra={"model_version": os.environ.get("MODEL_VERSION", "unknown")})
         start = time.perf_counter()
 
+        # normalise() returns RGB, but Ultralytics treats numpy input as BGR
+        # (OpenCV convention). Without this flip the model sees red and blue
+        # swapped, which cost ~7 points of recall on the test split.
+        bgr = np.ascontiguousarray(image[..., ::-1])
+
         try:
             results = self.model.predict( # type: ignore[no-untyped-call]
-                source=image,
+                source=bgr,
                 conf=self.conf,
                 iou=self.iou,
                 verbose=False,
