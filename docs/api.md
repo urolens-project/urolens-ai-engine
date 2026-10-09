@@ -162,6 +162,7 @@ until the process restarts (or `reset_engine()` is called).
 | `MODEL_WEIGHTS_PATH` | `src/urolens_ai/models/yolov8/best.pt` | |
 | `MODEL_VERSION` | `unknown` | Surfaced in `InferenceResult` |
 | `INFERENCE_CONF_THRESHOLD` | `0.35` | See note below |
+| `CLASS_THRESHOLDS_PATH` | `src/urolens_ai/models/yolov8/thresholds.yaml` | Per-class cut-offs; classes not listed use `INFERENCE_CONF_THRESHOLD`. See note below |
 | `INFERENCE_IOU_THRESHOLD` | `0.5` | NMS IoU |
 | `RULE_ENGINE_CONFIG_PATH` | `src/urolens_ai/smart_diagnosis/config.yaml` | |
 | `MIN_IMAGE_WIDTH` / `MIN_IMAGE_HEIGHT` | `640` / `480` | |
@@ -176,6 +177,16 @@ until the process restarts (or `reset_engine()` is called).
 > count and therefore every probability level: a stricter threshold suppresses
 > detections and pushes scores toward LOW. Re-run the sweep whenever the model
 > weights change, and set the value explicitly rather than relying on the default.
+
+> **Per-class thresholds.** `thresholds.yaml` overrides the global threshold per
+> class. It was chosen on the valid split with `scripts/evaluate.py
+> --sweep-per-class`, which only moves a class if its count error improves by a
+> minimum margin. Measured once on test through `infer()`: mean count error fell
+> from 0.204 to 0.181 with identical diagnosis agreement, and the rule-engine
+> classes (crystals, erythrocytes, urinary casts) stayed at `0.35`. If the file
+> is missing, every class uses `INFERENCE_CONF_THRESHOLD`. The values are tied
+> to the weights: regenerate the file with `--sweep-per-class --split valid
+> --thresholds-out <path>` whenever the model changes.
 
 ---
 

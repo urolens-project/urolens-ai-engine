@@ -20,6 +20,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
+import yaml
 from ultralytics import YOLO
 
 from urolens_ai.utils.exceptions import InferenceError
@@ -41,6 +42,27 @@ _INFERENCE_CONF_THRESHOLD: float = float(
 _INFERENCE_IOU_THRESHOLD: float = float(
     os.environ.get("INFERENCE_IOU_THRESHOLD", "0.5")
 )
+# Per-class overrides of INFERENCE_CONF_THRESHOLD, chosen by
+# scripts/evaluate.py --sweep-per-class. Classes not listed use the global value.
+_CLASS_THRESHOLDS_PATH: str = os.environ.get(
+    "CLASS_THRESHOLDS_PATH",
+    "src/urolens_ai/models/yolov8/thresholds.yaml",
+)
+
+
+def load_class_thresholds(path: str) -> dict[str, float]:
+    """
+    Read the per-class confidence thresholds file.
+
+    Keys are YOLO class names as the model emits them (dashes, e.g.
+    "urinary-casts"). A missing file is not an error: every class then uses
+    INFERENCE_CONF_THRESHOLD, which is the pre-per-class behaviour.
+    """
+    if not Path(path).exists():
+        logger.warning("class_thresholds_missing", extra={"path": path})
+        return {}
+    config = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
+    return {str(k): float(v) for k, v in (config.get("per_class") or {}).items()}
 
 
 # ---------------------------------------------------------------------------
@@ -92,16 +114,30 @@ class YOLOEngine:
     model_path : str
         Path to the YOLOv8 weights file (.pt).
     conf : float
-        Confidence threshold. Detections below this score are discarded.
+        Confidence threshold passed to the model. Must be no higher than any
+        per-class threshold, or those classes lose detections before filtering.
     iou : float
         IoU threshold for Non-Maximum Suppression (NMS).
         Applied automatically by Ultralytics.
+    class_thresholds : dict[str, float] | None
+        Per-class cut-offs keyed by YOLO class name, applied after the model.
+    default_conf : float | None
+        Cut-off for classes not in class_thresholds. Defaults to `conf`.
     """
 
-    def __init__(self, model_path: str, conf: float, iou: float) -> None:
+    def __init__(
+        self,
+        model_path: str,
+        conf: float,
+        iou: float,
+        class_thresholds: dict[str, float] | None = None,
+        default_conf: float | None = None,
+    ) -> None:
         self.model_path = model_path
         self.conf = conf
         self.iou = iou
+        self.class_thresholds = class_thresholds or {}
+        self.default_conf = conf if default_conf is None else default_conf
         self.model = self._load_model(model_path)
 
     def _load_model(self, path: str) -> YOLO:
@@ -199,6 +235,8 @@ class YOLOEngine:
                 class_id = int(box.cls[0].item())
                 class_name = result.names[class_id]
                 confidence = float(box.conf[0].item())
+                if confidence < self.class_thresholds.get(class_name, self.default_conf):
+                    continue
                 x1, y1, x2, y2 = box.xyxy[0].tolist() # type: ignore[no-untyped-call]
                 detections.append(
                     Detection(
@@ -239,10 +277,15 @@ def get_engine() -> YOLOEngine:
     """
     global _engine
     if _engine is None:
+        class_thresholds = load_class_thresholds(_CLASS_THRESHOLDS_PATH)
         _engine = YOLOEngine(
             model_path=_MODEL_WEIGHTS_PATH,
-            conf=_INFERENCE_CONF_THRESHOLD,
+            # The model must keep everything down to the lowest per-class cut-off;
+            # run() then applies each class's own threshold.
+            conf=min([_INFERENCE_CONF_THRESHOLD, *class_thresholds.values()]),
             iou=_INFERENCE_IOU_THRESHOLD,
+            class_thresholds=class_thresholds,
+            default_conf=_INFERENCE_CONF_THRESHOLD,
         )
     return _engine
 
