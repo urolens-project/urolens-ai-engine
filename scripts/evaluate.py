@@ -106,6 +106,73 @@ def true_counts(label_path: Path, n_classes: int) -> collections.Counter:
 # ---------------------------------------------------------------------------
 
 
+def predict_detections(
+    weights: Path,
+    images: Path,
+    labels: Path,
+    names: list[str],
+    conf: float,
+    iou: float,
+    imgsz: int,
+    device: str,
+    batch: int = 16,
+    verbose: bool = True,
+) -> tuple[list[np.ndarray], np.ndarray, list[str]]:
+    """
+    Run the detector over a split once and keep every detection above `conf`.
+
+    Returns (detections, truth, files): detections[i] is a (k, 2) array of
+    (class index, confidence) for image i; truth is the (n_images, n_classes)
+    ground-truth count matrix. Counting at any stricter threshold is then free,
+    see counts_at().
+    """
+    from ultralytics import YOLO
+
+    model = YOLO(str(weights))
+    files = sorted(p.name for p in images.iterdir() if p.suffix.lower() in {".jpg", ".jpeg", ".png"})
+    if not files:
+        raise SystemExit(f"no images in {images}")
+
+    detections: list[np.ndarray] = []
+    truth = np.zeros((len(files), len(names)), dtype=np.int32)
+
+    for start in range(0, len(files), batch):
+        chunk = files[start : start + batch]
+        results = model.predict(
+            [str(images / f) for f in chunk],
+            conf=conf,
+            iou=iou,
+            imgsz=imgsz,
+            device=device,
+            verbose=False,
+        )
+        for offset, (filename, result) in enumerate(zip(chunk, results)):
+            row = start + offset
+            if result.boxes is not None and len(result.boxes):
+                detections.append(
+                    np.stack([result.boxes.cls.cpu().numpy(), result.boxes.conf.cpu().numpy()], 1)
+                )
+            else:
+                detections.append(np.zeros((0, 2)))
+            stem = filename.rsplit(".", 1)[0]
+            for index, count in true_counts(labels / f"{stem}.txt", len(names)).items():
+                truth[row, index] = count
+        if verbose and start and start % (batch * 20) == 0:
+            print(f"  {start}/{len(files)}", flush=True)
+    return detections, truth, files
+
+
+def counts_at(detections: list[np.ndarray], thresholds: np.ndarray) -> np.ndarray:
+    """Count detections per image and class, keeping conf >= thresholds[class]."""
+    predicted = np.zeros((len(detections), len(thresholds)), dtype=np.int32)
+    for row, dets in enumerate(detections):
+        if len(dets):
+            cls = dets[:, 0].astype(int)
+            keep = dets[:, 1] >= thresholds[cls]
+            np.add.at(predicted[row], cls[keep], 1)
+    return predicted
+
+
 def predict_counts(
     weights: Path,
     images: Path,
@@ -123,37 +190,10 @@ def predict_counts(
 
     Both are (n_images, n_classes) integer arrays aligned by row.
     """
-    from ultralytics import YOLO
-
-    model = YOLO(str(weights))
-    files = sorted(p.name for p in images.iterdir() if p.suffix.lower() in {".jpg", ".jpeg", ".png"})
-    if not files:
-        raise SystemExit(f"no images in {images}")
-
-    predicted = np.zeros((len(files), len(names)), dtype=np.int32)
-    truth = np.zeros((len(files), len(names)), dtype=np.int32)
-
-    for start in range(0, len(files), batch):
-        chunk = files[start : start + batch]
-        results = model.predict(
-            [str(images / f) for f in chunk],
-            conf=conf,
-            iou=iou,
-            imgsz=imgsz,
-            device=device,
-            verbose=False,
-        )
-        for offset, (filename, result) in enumerate(zip(chunk, results)):
-            row = start + offset
-            if result.boxes is not None and len(result.boxes):
-                for cls in result.boxes.cls.tolist():
-                    predicted[row, int(cls)] += 1
-            stem = filename.rsplit(".", 1)[0]
-            for index, count in true_counts(labels / f"{stem}.txt", len(names)).items():
-                truth[row, index] = count
-        if verbose and start and start % (batch * 20) == 0:
-            print(f"  {start}/{len(files)}", flush=True)
-    return predicted, truth, files
+    detections, truth, files = predict_detections(
+        weights, images, labels, names, conf, iou, imgsz, device, batch, verbose
+    )
+    return counts_at(detections, np.full(len(names), conf)), truth, files
 
 
 # ---------------------------------------------------------------------------
@@ -462,6 +502,73 @@ def sweep(
     return rows
 
 
+PER_CLASS_GRID = [round(c, 2) for c in np.arange(0.10, 0.81, 0.05)]
+
+# A class keeps the uniform baseline unless moving improves its count MAE by at
+# least this much. Smaller gains are within what tuning on one split can produce
+# by chance, and would not survive to the test split.
+PER_CLASS_MIN_GAIN = 0.05
+
+
+def sweep_per_class(
+    weights: Path, images: Path, labels: Path, names: list[str], args: argparse.Namespace
+) -> dict[str, float]:
+    """
+    Choose one confidence threshold per class by per-image count error.
+
+    A single threshold forces one trade-off on every class: raising it to quiet a
+    noisy class (sperm-cells) also costs recall on the classes the rule engine
+    reads (urinary-casts lose ~10 recall points going 0.35 -> 0.5). Counts per
+    class depend only on that class's threshold, so each one can be chosen
+    independently: the value minimising mean absolute count error per image,
+    which is the error a MedTech sees on each result.
+
+    The detector runs once at the bottom of the grid; every candidate is then
+    a re-count. Diagnosis agreement is reported against the uniform
+    --conf baseline so the choice can be rejected if it hurts the product.
+    """
+    detections, truth, _ = predict_detections(
+        weights, images, labels, names, PER_CLASS_GRID[0], args.iou, args.imgsz,
+        args.device, verbose=False,
+    )
+    baseline = np.full(len(names), args.conf)
+    chosen = baseline.copy()
+
+    print(f"\n{'class':<24}{'MAE@' + format(args.conf, 'g'):>10}{'best conf':>11}{'MAE':>8}"
+          f"{'bias%@base':>12}{'bias%@best':>12}")
+    for index, name in enumerate(names):
+        maes = []
+        for conf in PER_CLASS_GRID:
+            thresholds = baseline.copy()
+            thresholds[index] = conf
+            predicted = counts_at(detections, thresholds)
+            maes.append(np.abs(predicted[:, index] - truth[:, index]).mean())
+        base_mae = np.abs(counts_at(detections, baseline)[:, index] - truth[:, index]).mean()
+        if min(maes) <= base_mae * (1 - PER_CLASS_MIN_GAIN):
+            chosen[index] = PER_CLASS_GRID[int(np.argmin(maes))]
+        base_counts = count_metrics(counts_at(detections, baseline), truth, names)[name]
+        best_counts = count_metrics(counts_at(detections, chosen), truth, names)[name]
+        print(f"{name:<24}{base_counts['mae']:>10.3f}{chosen[index]:>11.2f}"
+              f"{best_counts['mae']:>8.3f}{base_counts['bias_pct']:>12.1f}"
+              f"{best_counts['bias_pct']:>12.1f}")
+
+    print("\nDiagnosis agreement (kappa), uniform baseline vs per-class:")
+    base_dx = diagnosis_agreement(counts_at(detections, baseline), truth, names)
+    best_dx = diagnosis_agreement(counts_at(detections, chosen), truth, names)
+    for condition in CONDITIONS:
+        print(f"  {condition:<20} {base_dx[condition]['kappa']:.4f} -> "
+              f"{best_dx[condition]['kappa']:.4f}   agreement "
+              f"{base_dx[condition]['agreement']:.4f} -> {best_dx[condition]['agreement']:.4f}")
+    return {name: float(chosen[i]) for i, name in enumerate(names)}
+
+
+def load_thresholds(path: Path, names: list[str], default: float) -> np.ndarray:
+    """Per-class threshold vector from a thresholds.yaml; missing classes use `default`."""
+    config = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    per_class = config.get("per_class", {})
+    return np.array([float(per_class.get(name, default)) for name in names])
+
+
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
@@ -499,6 +606,23 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="sweep confidence and pick the threshold minimising count bias",
     )
     parser.add_argument(
+        "--sweep-per-class",
+        action="store_true",
+        help="choose one threshold per class by count MAE (run on --split valid)",
+    )
+    parser.add_argument(
+        "--thresholds-out",
+        type=Path,
+        default=None,
+        help="with --sweep-per-class: write the chosen thresholds as YAML",
+    )
+    parser.add_argument(
+        "--thresholds",
+        type=Path,
+        default=None,
+        help="per-class thresholds.yaml for COUNTS and diagnosis (overrides --conf per class)",
+    )
+    parser.add_argument(
         "--skip-detection-metrics",
         action="store_true",
         help="skip the Ultralytics validator pass (counts and diagnosis only)",
@@ -521,6 +645,22 @@ def main(argv: list[str] | None = None) -> int:
             args.json.write_text(json.dumps(rows, indent=2), encoding="utf-8")
         return 0
 
+    if args.sweep_per_class:
+        if args.split == "test":
+            print("warning: choosing thresholds on the test split leaks into the "
+                  "reported result -- use --split valid", file=sys.stderr)
+        chosen = sweep_per_class(args.weights, images, labels, names, args)
+        if args.thresholds_out:
+            args.thresholds_out.write_text(
+                "# Per-class confidence thresholds, chosen by scripts/evaluate.py "
+                f"--sweep-per-class on the {args.split} split.\n"
+                "# Re-run whenever the model weights change.\n"
+                + yaml.safe_dump({"per_class": chosen}, sort_keys=False),
+                encoding="utf-8",
+            )
+            print(f"\nWrote {args.thresholds_out}")
+        return 0
+
     detection = None
     if not args.skip_detection_metrics:
         print(f"Running detection metrics (conf={args.map_conf:g})", flush=True)
@@ -530,9 +670,17 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     print("Predicting counts", flush=True)
-    predicted, truth, files = predict_counts(
-        args.weights, images, labels, names, args.conf, args.iou, args.imgsz, args.device
-    )
+    if args.thresholds:
+        thresholds = load_thresholds(args.thresholds, names, args.conf)
+        detections, truth, files = predict_detections(
+            args.weights, images, labels, names, float(thresholds.min()), args.iou,
+            args.imgsz, args.device,
+        )
+        predicted = counts_at(detections, thresholds)
+    else:
+        predicted, truth, files = predict_counts(
+            args.weights, images, labels, names, args.conf, args.iou, args.imgsz, args.device
+        )
     counts = count_metrics(predicted, truth, names)
     diagnosis = diagnosis_agreement(predicted, truth, names)
     print_report(detection, counts, diagnosis, names, args.map_conf)
