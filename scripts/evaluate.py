@@ -144,6 +144,7 @@ def predict_detections(
             iou=iou,
             imgsz=imgsz,
             device=device,
+            max_det=1000,  # match the engine; the default of 300 caps dense fields
             verbose=False,
         )
         for offset, (filename, result) in enumerate(zip(chunk, results)):

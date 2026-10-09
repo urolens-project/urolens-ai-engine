@@ -164,6 +164,7 @@ until the process restarts (or `reset_engine()` is called).
 | `INFERENCE_CONF_THRESHOLD` | `0.35` | See note below |
 | `CLASS_THRESHOLDS_PATH` | `src/urolens_ai/models/yolov8/thresholds.yaml` | Per-class cut-offs; classes not listed use `INFERENCE_CONF_THRESHOLD`. See note below |
 | `INFERENCE_IOU_THRESHOLD` | `0.5` | NMS IoU |
+| `MAX_DETECTIONS` | `1000` | Most boxes per image. The Ultralytics default of 300 capped dense fields (~500 particles) at exactly 300 |
 | `RULE_ENGINE_CONFIG_PATH` | `src/urolens_ai/smart_diagnosis/config.yaml` | |
 | `MIN_IMAGE_WIDTH` / `MIN_IMAGE_HEIGHT` | `640` / `480` | |
 | `ACCEPTED_IMAGE_FORMATS` | `JPEG,PNG` | |

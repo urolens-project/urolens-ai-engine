@@ -207,6 +207,16 @@ class TestYOLOEngineRun:
         assert call_kwargs["conf"] == 0.45
         assert call_kwargs["iou"] == 0.5
 
+    def test_predict_called_with_max_det_above_ultralytics_default(self) -> None:
+        """Dense fields hold ~500 particles; the Ultralytics default of 300 capped them."""
+        mock_model = MagicMock()
+        mock_model.predict.return_value = [_make_mock_result([], {})]
+
+        engine = _make_engine_with_mock_model(mock_model)
+        engine.run(np.zeros((480, 640, 3), dtype=np.float32))
+
+        assert mock_model.predict.call_args.kwargs["max_det"] == 1000
+
     def test_per_class_thresholds_filter_detections(self) -> None:
         """Each class is cut at its own threshold; unlisted classes use the default."""
         mock_model = MagicMock()

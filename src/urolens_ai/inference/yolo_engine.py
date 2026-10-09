@@ -42,6 +42,9 @@ _INFERENCE_CONF_THRESHOLD: float = float(
 _INFERENCE_IOU_THRESHOLD: float = float(
     os.environ.get("INFERENCE_IOU_THRESHOLD", "0.5")
 )
+# Ultralytics keeps at most 300 boxes per image by default. Dense fields hold
+# ~500 particles, so the default silently capped counts at 300.
+_MAX_DETECTIONS: int = int(os.environ.get("MAX_DETECTIONS", "1000"))
 # Per-class overrides of INFERENCE_CONF_THRESHOLD, chosen by
 # scripts/evaluate.py --sweep-per-class. Classes not listed use the global value.
 _CLASS_THRESHOLDS_PATH: str = os.environ.get(
@@ -123,6 +126,8 @@ class YOLOEngine:
         Per-class cut-offs keyed by YOLO class name, applied after the model.
     default_conf : float | None
         Cut-off for classes not in class_thresholds. Defaults to `conf`.
+    max_det : int
+        Maximum boxes the model returns per image, before per-class filtering.
     """
 
     def __init__(
@@ -132,12 +137,14 @@ class YOLOEngine:
         iou: float,
         class_thresholds: dict[str, float] | None = None,
         default_conf: float | None = None,
+        max_det: int = 1000,
     ) -> None:
         self.model_path = model_path
         self.conf = conf
         self.iou = iou
         self.class_thresholds = class_thresholds or {}
         self.default_conf = conf if default_conf is None else default_conf
+        self.max_det = max_det
         self.model = self._load_model(model_path)
 
     def _load_model(self, path: str) -> YOLO:
@@ -211,6 +218,7 @@ class YOLOEngine:
                 source=bgr,
                 conf=self.conf,
                 iou=self.iou,
+                max_det=self.max_det,
                 verbose=False,
             )
         except Exception as exc:
@@ -286,6 +294,7 @@ def get_engine() -> YOLOEngine:
             iou=_INFERENCE_IOU_THRESHOLD,
             class_thresholds=class_thresholds,
             default_conf=_INFERENCE_CONF_THRESHOLD,
+            max_det=_MAX_DETECTIONS,
         )
     return _engine
 
