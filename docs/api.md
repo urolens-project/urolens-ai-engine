@@ -49,7 +49,7 @@ result.confidence_scores  # {"erythrocytes": 0.8341, "urinary-casts": 0.7102}
 | `ImageValidationError` | `CORRUPT_IMAGE` | Bytes are not a decodable image |
 | | `FORMAT_UNSUPPORTED` | Not JPEG or PNG; the detected format is in the message |
 | | `RESOLUTION_TOO_LOW` | Below 640 × 480; required and actual are in the message |
-| | `IMAGE_EXPOSURE` | Near-black or blown-out frame. Show "check the light and retake" |
+| | `IMAGE_EXPOSURE` | Near-black or blown-out frame, or more than 75% black (e.g. phone held too far from the eyepiece). Show "check the light, fill the screen with the eyepiece circle, and retake" |
 | | `NOT_MICROSCOPY` | Input gate says this is not a urine microscopy image (e.g. a selfie). Show "retake image" — never a result |
 | `InferenceError` | `MODEL_NOT_LOADED` | Weights missing or unreadable |
 | | `INFERENCE_FAILED` | Any other failure during detection |

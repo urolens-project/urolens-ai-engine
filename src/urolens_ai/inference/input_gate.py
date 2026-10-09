@@ -9,8 +9,12 @@ plain bright walls look like an empty microscope field. This gate runs two check
 
     1. Exposure   -- near-black or blown-out frames (lens cap on, light off,
                      flash). Thresholds are deliberately loose: real slides
-                     range from mean 43 to 233, and OpenUrine eyepiece images
-                     have up to ~40% black vignette.
+                     range from mean 43 to 233, OpenUrine eyepiece images
+                     have up to ~40% black vignette, and a phone held at the
+                     eyepiece can leave far more. The black-pixel limit is
+                     0.75: on simulated eyepiece photos, counts stayed accurate
+                     up to a 75% border, and held-out negatives leaked through
+                     at about the same rate as with the old 0.6 limit.
     2. Content    -- a 2-class classifier (slide / not_slide) trained by
                      scripts/build_gate_dataset.py on UroLens + OpenUrine vs.
                      COCO. Its threshold is set so >=99.9% of real test slides
@@ -52,7 +56,7 @@ _GATE_MIN_SLIDE_PROB: float = float(os.environ.get("GATE_MIN_SLIDE_PROB", "0.43"
 # Exposure limits on 0-255 luminance. See module docstring for where they come from.
 _MIN_MEAN_LUMINANCE = 25.0
 _MAX_MEAN_LUMINANCE = 245.0
-_MAX_CLIPPED_FRACTION = 0.6
+_MAX_CLIPPED_FRACTION = 0.75
 
 _SLIDE_CLASS = "slide"
 
