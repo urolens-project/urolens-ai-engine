@@ -16,7 +16,13 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
-from urolens_ai.inference.yolo_engine import Detection, YOLOEngine, get_engine, reset_engine
+from urolens_ai.inference.yolo_engine import (
+    Detection,
+    YOLOEngine,
+    get_engine,
+    load_class_thresholds,
+    reset_engine,
+)
 from urolens_ai.utils.exceptions import InferenceError
 
 
@@ -201,6 +207,34 @@ class TestYOLOEngineRun:
         assert call_kwargs["conf"] == 0.45
         assert call_kwargs["iou"] == 0.5
 
+    def test_per_class_thresholds_filter_detections(self) -> None:
+        """Each class is cut at its own threshold; unlisted classes use the default."""
+        mock_model = MagicMock()
+        names = {0: "bacteria", 1: "epithelial-cells", 2: "erythrocytes"}
+        boxes = [
+            _make_mock_box(0, "bacteria", 0.20),          # >= 0.15 -> kept
+            _make_mock_box(1, "epithelial-cells", 0.50),  # <  0.55 -> dropped
+            _make_mock_box(1, "epithelial-cells", 0.60),  # >= 0.55 -> kept
+            _make_mock_box(2, "erythrocytes", 0.30),      # <  0.35 default -> dropped
+            _make_mock_box(2, "erythrocytes", 0.40),      # >= 0.35 default -> kept
+        ]
+        mock_model.predict.return_value = [_make_mock_result(boxes, names)]
+
+        with patch("urolens_ai.inference.yolo_engine.Path") as mock_path:
+            mock_path.return_value.exists.return_value = True
+            with patch("urolens_ai.inference.yolo_engine.YOLO", return_value=mock_model):
+                engine = YOLOEngine(
+                    model_path="fake/weights.pt",
+                    conf=0.15,
+                    iou=0.5,
+                    class_thresholds={"bacteria": 0.15, "epithelial-cells": 0.55},
+                    default_conf=0.35,
+                )
+        detections = engine.run(np.zeros((480, 640, 3), dtype=np.float32))
+
+        kept = sorted((d.class_name, d.confidence) for d in detections)
+        assert kept == [("bacteria", 0.20), ("epithelial-cells", 0.60), ("erythrocytes", 0.40)]
+
     def test_rgb_input_is_passed_to_model_as_bgr(self) -> None:
         """
         normalise() produces RGB, but Ultralytics treats numpy input as BGR.
@@ -235,7 +269,11 @@ class TestGetEngine:
         # Reset singleton for test isolation
         reset_engine()
 
-        with patch("urolens_ai.inference.yolo_engine.Path") as mock_path:
+        # load_class_thresholds is stubbed because the Path mock would hand
+        # yaml.safe_load a MagicMock "file" that never hits EOF and eats all RAM.
+        with patch("urolens_ai.inference.yolo_engine.Path") as mock_path, patch(
+            "urolens_ai.inference.yolo_engine.load_class_thresholds", return_value={}
+        ):
             mock_path.return_value.exists.return_value = True
             with patch(
                 "urolens_ai.inference.yolo_engine.YOLO", return_value=mock_model
@@ -260,3 +298,28 @@ class TestGetEngine:
 
         assert exc_info.value.code == "MODEL_NOT_LOADED"
         reset_engine()  # Clean up singleton after test
+
+
+# ---------------------------------------------------------------------------
+# load_class_thresholds()
+# ---------------------------------------------------------------------------
+
+
+class TestLoadClassThresholds:
+    def test_reads_per_class_mapping(self, tmp_path) -> None:  # type: ignore[no-untyped-def]
+        path = tmp_path / "thresholds.yaml"
+        path.write_text("per_class:\n  bacteria: 0.15\n  sperm-cells: 0.3\n", encoding="utf-8")
+        assert load_class_thresholds(str(path)) == {"bacteria": 0.15, "sperm-cells": 0.3}
+
+    def test_missing_file_falls_back_to_uniform(self, tmp_path) -> None:  # type: ignore[no-untyped-def]
+        assert load_class_thresholds(str(tmp_path / "nope.yaml")) == {}
+
+    def test_shipped_file_covers_every_model_class(self) -> None:
+        """The shipped thresholds must name real classes, or they silently do nothing."""
+        shipped = load_class_thresholds("src/urolens_ai/models/yolov8/thresholds.yaml")
+        model_classes = {
+            "bacteria", "crystals", "epithelial-cells", "erythrocytes", "leukocytes",
+            "mucus-threads", "sperm-cells", "trichomonas-vaginalis", "urinary-casts", "yeast",
+        }
+        assert set(shipped) == model_classes
+        assert all(0.0 < v < 1.0 for v in shipped.values())

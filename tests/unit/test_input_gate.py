@@ -66,9 +66,15 @@ class TestCheckExposure:
         image[:, :256] = 0.0  # 40% of columns black
         check_exposure(image)
 
+    def test_phone_eyepiece_border_passes(self) -> None:
+        """A phone held at the eyepiece can leave ~70% black border; must pass."""
+        image = _image(170.0)
+        image[:, :448] = 0.0  # 70% of columns black
+        check_exposure(image)
+
     def test_mostly_black_frame_rejected(self) -> None:
         image = _image(200.0)
-        image[:, :448] = 0.0  # 70% black
+        image[:, :544] = 0.0  # 85% black, mean still above the darkness floor
         with pytest.raises(ImageValidationError) as exc_info:
             check_exposure(image)
         assert exc_info.value.code == "IMAGE_EXPOSURE"
