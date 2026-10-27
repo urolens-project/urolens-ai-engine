@@ -13,10 +13,12 @@ Run with:
 
 from __future__ import annotations
 
+import io
 import os
 from pathlib import Path
 
 import pytest
+from PIL import Image
 
 from urolens_ai import infer
 from urolens_ai.schemas.inference import InferenceResult
@@ -170,3 +172,55 @@ class TestInferValidationFailures:
         with pytest.raises(ImageValidationError) as exc_info:
             infer(image_bytes)
         assert exc_info.value.code == "NOT_MICROSCOPY"
+
+
+# ---------------------------------------------------------------------------
+# Boxes and image size for MedTech box review
+# ---------------------------------------------------------------------------
+
+
+def _with_exif_orientation(image_bytes: bytes, orientation: int) -> bytes:
+    """Re-save a JPEG with an EXIF orientation tag, as a sideways phone photo has."""
+    image = Image.open(io.BytesIO(image_bytes))
+    exif = Image.Exif()
+    exif[0x0112] = orientation
+    buffer = io.BytesIO()
+    image.save(buffer, format="JPEG", exif=exif, quality=95)
+    return buffer.getvalue()
+
+
+@pytest.fixture
+def slide_image_bytes() -> bytes:
+    """A real 640 x 480 test-split slide with 7 leukocytes, so boxes are non-empty."""
+    path = Path("tests/fixtures/sample_images/slide_leukocytes_640x480.jpg")
+    return path.read_bytes()
+
+
+class TestInferDetections:
+    def test_one_box_per_counted_particle(self, slide_image_bytes: bytes) -> None:
+        result = infer(slide_image_bytes)
+        assert result.detections
+        assert len(result.detections) == result.filtered_detection_count
+        for name, count in result.particles.items():
+            assert sum(d.class_name == name for d in result.detections) == count
+
+    def test_boxes_lie_inside_the_image(self, slide_image_bytes: bytes) -> None:
+        result = infer(slide_image_bytes)
+        assert result.detections
+        for d in result.detections:
+            x1, y1, x2, y2 = d.bbox
+            assert 0 <= x1 < x2 <= result.image_width + 1
+            assert 0 <= y1 < y2 <= result.image_height + 1
+
+    def test_rotated_photo_reports_upright_size(self, slide_image_bytes: bytes) -> None:
+        """
+        EXIF orientation 6 stores a 640 x 480 image that displays as 480 x 640.
+        The boxes are in upright pixels, so the size must be too: before the
+        fix the size came back 640 x 480 and boxes ran past the bottom edge.
+        """
+        result = infer(_with_exif_orientation(slide_image_bytes, 6))
+        assert (result.image_width, result.image_height) == (480, 640)
+        assert result.detections
+        for d in result.detections:
+            assert d.bbox[2] <= result.image_width + 1
+            assert d.bbox[3] <= result.image_height + 1

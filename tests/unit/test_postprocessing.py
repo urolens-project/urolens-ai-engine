@@ -13,7 +13,11 @@ from __future__ import annotations
 
 import pytest
 
-from urolens_ai.inference.postprocessing import map_detections
+from urolens_ai.inference.postprocessing import (
+    map_detections,
+    particle_name,
+    to_output_detections,
+)
 from urolens_ai.inference.yolo_engine import Detection
 
 
@@ -164,3 +168,49 @@ class TestMapDetectionsReturnTypes:
         assert len(result) == 2
         assert isinstance(result[0], dict)
         assert isinstance(result[1], dict)
+
+
+# ---------------------------------------------------------------------------
+# particle_name() / to_output_detections() — boxes for MedTech review
+# ---------------------------------------------------------------------------
+
+
+class TestToOutputDetections:
+    def test_particle_name_converts_dashes(self) -> None:
+        """Model class names use dashes; every output key uses underscores."""
+        assert particle_name("urinary-casts") == "urinary_casts"
+        assert particle_name("erythrocytes") == "erythrocytes"
+
+    def test_empty_input_returns_empty_list(self) -> None:
+        assert to_output_detections([]) == []
+
+    def test_one_box_per_detection_with_fields_preserved(self) -> None:
+        detection = Detection(
+            class_id=7,
+            class_name="erythrocytes",
+            confidence=0.83,
+            bbox=(10.5, 20.0, 30.25, 40.0),
+        )
+        (box,) = to_output_detections([detection])
+        assert box.class_id == 7
+        assert box.class_name == "erythrocytes"
+        assert box.confidence == 0.83
+        assert box.bbox == [10.5, 20.0, 30.25, 40.0]
+
+    def test_box_names_match_particle_keys(self) -> None:
+        """
+        Boxes and counts must use the same keys, so the backend can tie each
+        box to its count. labels.txt names with dashes are the case that broke.
+        """
+        detections = [
+            _make_detection("urinary-casts", 0.7),
+            _make_detection("urinary-casts", 0.6),
+            _make_detection("epithelial-cells", 0.9),
+            _make_detection("erythrocytes", 0.8),
+        ]
+        particles, _ = map_detections(detections)
+        boxes = to_output_detections(detections)
+
+        assert {box.class_name for box in boxes} == set(particles)
+        for name, count in particles.items():
+            assert sum(box.class_name == name for box in boxes) == count

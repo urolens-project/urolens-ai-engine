@@ -42,14 +42,14 @@ class GlomerulonephritisRules:
         self.thresholds: dict[str, Any] = config["thresholds"]
         self.evidence_min_count: int = config["evidence_min_count"]
 
-    def evaluate(self, classification: dict[str, int]) -> RuleResult:
+    def evaluate(self, classification: dict[str, float]) -> RuleResult:
         """
         Evaluate particle counts against Glomerulonephritis rules.
 
         Parameters
         ----------
-        classification : dict[str, int]
-            Particle names mapped to confirmed counts.
+        classification : dict[str, float]
+            Particle names mapped to confirmed counts (averages per field allowed).
             Missing keys are treated as count = 0.
 
         Returns
@@ -63,7 +63,7 @@ class GlomerulonephritisRules:
 
         for particle_name, particle_config in self.particles.items():
             detected_count = classification.get(particle_name, 0)
-            normal_max: int = particle_config["normal_range_max"]
+            normal_max: float = particle_config["normal_range_max"]
             weight: float = particle_config["weight"]
             display_name: str = particle_config["display_name"]
 

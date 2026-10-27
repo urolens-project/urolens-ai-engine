@@ -20,8 +20,10 @@ Runs particle detection on one urine sediment microscopy image.
 
 ```python
 result = infer(image_bytes)
-result.particles          # {"erythrocytes": 5, "urinary-casts": 2}
-result.confidence_scores  # {"erythrocytes": 0.8341, "urinary-casts": 0.7102}
+result.particles          # {"erythrocytes": 5, "urinary_casts": 2}
+result.confidence_scores  # {"erythrocytes": 0.8341, "urinary_casts": 0.7102}
+result.detections[0]      # Detection(class_id=3, class_name="erythrocytes",
+                          #           confidence=0.91, bbox=[91.0, 177.5, 137.6, 228.4])
 ```
 
 **Parameters**
@@ -37,10 +39,24 @@ result.confidence_scores  # {"erythrocytes": 0.8341, "urinary-casts": 0.7102}
 | `model_version` | `str` | From the `MODEL_VERSION` env var, else `"unknown"` |
 | `particles` | `dict[str, int]` | Class name → count. Classes with zero detections are absent |
 | `confidence_scores` | `dict[str, float]` | Class name → mean confidence, 4 dp |
+| `detections` | `list[Detection]` | Every counted box. One per unit in `particles`, keyed by the same names |
 | `raw_detection_count` | `int` | Detections before aggregation |
-| `filtered_detection_count` | `int` | Detections after aggregation |
+| `filtered_detection_count` | `int` | Detections after aggregation; equals `len(detections)` |
 | `inference_time_ms` | `float` | Wall-clock, 2 dp |
-| `image_width`, `image_height` | `int` | Source dimensions, before normalisation |
+| `image_width`, `image_height` | `int` | Size of the **upright** image (after EXIF rotation) — the space `bbox` is in |
+
+**`Detection`**
+
+| Field | Type | Meaning |
+|---|---|---|
+| `class_id` | `int` | Index into `labels.txt` |
+| `class_name` | `str` | Particle name with underscores, same as the `particles` keys |
+| `confidence` | `float` | 0.0–1.0, already above that class's threshold |
+| `bbox` | `list[float]` | `[x1, y1, x2, y2]` in pixels of the upright image |
+
+To store boxes as fractions of the image, divide x by `image_width` and y by
+`image_height`. Both describe the same upright image, so a sideways phone photo
+needs no extra handling.
 
 **Raises**
 
@@ -61,8 +77,8 @@ All three carry `.code` and `.message`. Branch on `.code`, never on message text
 - **EXIF is stripped**, not merely ignored. Orientation is applied, then all
   metadata is discarded. This is a patient-privacy requirement: EXIF can carry GPS
   coordinates and device serial numbers.
-- **Particle keys here use dashes** (`urinary-casts`), matching `labels.txt`.
-  `generate_smart_diagnosis` expects **underscores** (`urinary_casts`). See §3.
+- **Particle keys use underscores** (`urinary_casts`) in both `particles` and
+  `detections`, the same format `generate_smart_diagnosis` expects. See §3.
 
 ---
 
@@ -83,7 +99,11 @@ output.gout.evidence         # [EvidenceItem(...), ...]
 
 | Name | Type | Notes |
 |---|---|---|
-| `classification` | `dict[str, int]` | Particle name → confirmed count. Unknown keys ignored; missing keys treated as 0 |
+| `classification` | `dict[str, float]` | Particle name → confirmed count. Unknown keys ignored; missing keys treated as 0 |
+
+For multi-field specimens pass the **unrounded average per field** (e.g.
+`{"erythrocytes": 2.4}`). Thresholds compare against it directly, so rounding
+first shifts results at the boundaries. Whole-number counts still work.
 
 **Returns — `SmartDiagnosisOutput`**
 
@@ -100,7 +120,7 @@ Each `ConditionScore` carries `condition`, `level` (`LOW` / `MODERATE` / `HIGH`)
 
 | Exception | `code` | Cause |
 |---|---|---|
-| `RuleEngineError` | `INVALID_CLASSIFICATION` | Not a dict, or a value is negative or not an `int` |
+| `RuleEngineError` | `INVALID_CLASSIFICATION` | Not a dict, or a value is negative, NaN, infinite, a `bool`, or not a number |
 | | `CONFIG_ERROR` | `config.yaml` missing or malformed |
 | | `RULE_EVALUATION_FAILED` | Failure inside a rule |
 
@@ -109,6 +129,11 @@ Each `ConditionScore` carries `condition`, `level` (`LOW` / `MODERATE` / `HIGH`)
 ```
 contribution = max(0, detected_count - normal_range_max) * weight
 ```
+
+`detected_count` and `normal_range_max` in each `EvidenceItem` are floats.
+A particle appears in `evidence` only when its count is at least the condition's
+`evidence_min_count`. For casts (normal max 0, minimum 1) an average below 1 per
+field still adds to the score but is left out of the evidence list.
 
 Summed per condition, then mapped: `<= low_max_score` → LOW,
 `>= high_min_score` → HIGH, otherwise MODERATE. Boundaries are inclusive on both
@@ -128,23 +153,13 @@ ends. Weights and thresholds live in
 
 ## 3. Particle key formats
 
-The two functions use different separators, and the boundary between them is a
-common source of silent zeros.
+`labels.txt` uses dashes (`urinary-casts`). Every output of `infer()` —
+`particles`, `confidence_scores` and `detections` — uses underscores
+(`urinary_casts`), the same format as `config.yaml` and the
+`generate_smart_diagnosis()` input. Counts can be passed straight through.
 
-| Context | Format | Example |
-|---|---|---|
-| `labels.txt`, `infer().particles` | dash | `urinary-casts` |
-| `generate_smart_diagnosis()` input, `config.yaml` | underscore | `urinary_casts` |
-
-`map_detections()` performs `.replace("-", "_")` on the live path. If you pass
-`infer()` output straight into `generate_smart_diagnosis()`, normalise first —
-unrecognised keys are **ignored silently**, so a mismatch does not raise, it just
-scores zero:
-
-```python
-counts = {k.replace("-", "_"): v for k, v in result.particles.items()}
-diagnosis = generate_smart_diagnosis(counts)
-```
+Unrecognised keys are **ignored silently** by `generate_smart_diagnosis()`, so a
+mismatched name does not raise, it just scores zero.
 
 The ten classes: `bacteria`, `crystals`, `epithelial_cells`, `erythrocytes`,
 `leukocytes`, `mucus_threads`, `sperm_cells`, `trichomonas_vaginalis`,
@@ -210,7 +225,9 @@ except InferenceError as exc:
 
 # MedTech reviews and confirms result.particles here. The rule engine runs on the
 # confirmed counts, not the raw ones -- that human step is part of the design.
-confirmed = {k.replace("-", "_"): v for k, v in reviewed_counts.items()}
+# For a multi-field specimen, average each class over the reviewed fields and
+# pass the averages unrounded, e.g. {"erythrocytes": 2.4}.
+confirmed = average_per_field(reviewed_fields)
 diagnosis = generate_smart_diagnosis(confirmed)
 ```
 

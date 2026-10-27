@@ -66,6 +66,43 @@ def _all_fixture_files() -> list[str]:
 
 
 # ---------------------------------------------------------------------------
+# Decimal counts — averages per field from multi-field capture
+# ---------------------------------------------------------------------------
+
+
+class TestDecimalCounts:
+    def test_whole_float_scores_like_int(self) -> None:
+        """8.0 and 8 must give the same result."""
+        as_float = generate_smart_diagnosis({"crystals": 8.0})
+        as_int = generate_smart_diagnosis({"crystals": 8})
+        assert as_float.gout.weighted_score == as_int.gout.weighted_score
+        assert as_float.gout.level == as_int.gout.level
+
+    def test_fractional_excess_scores_proportionally(self) -> None:
+        """Gout: (5.5 - 5) * 1.0 = 0.5, with the decimal count in the evidence."""
+        result = generate_smart_diagnosis({"crystals": 5.5})
+        assert result.gout.weighted_score == pytest.approx(0.5, rel=1e-6)
+        assert result.gout.evidence[0].detected_count == pytest.approx(5.5)
+        assert result.gout.evidence[0].contribution_score == pytest.approx(0.5)
+
+    def test_average_at_normal_max_does_not_score(self) -> None:
+        result = generate_smart_diagnosis({"crystals": 5.0, "erythrocytes": 3.0})
+        assert result.no_significant_indicators is True
+
+    def test_fractional_cast_average_scores_but_is_below_evidence_min_count(
+        self,
+    ) -> None:
+        """
+        GN casts: normal max 0, evidence_min_count 1. An average of 0.5 casts
+        per field still adds 0.5 * 0.4 to the score but is left out of the
+        evidence list. Pinned here so a config change to that rule is deliberate.
+        """
+        result = generate_smart_diagnosis({"urinary_casts": 0.5})
+        assert result.glomerulonephritis.weighted_score == pytest.approx(0.2)
+        assert result.glomerulonephritis.evidence == []
+
+
+# ---------------------------------------------------------------------------
 # Helper: assert a single ConditionScore against expected dict
 # ---------------------------------------------------------------------------
 
@@ -543,9 +580,20 @@ class TestInputValidation:
             generate_smart_diagnosis({"crystals": -1})
         assert exc_info.value.code == "INVALID_CLASSIFICATION"
 
-    def test_float_value_raises_rule_engine_error(self) -> None:
+    def test_float_value_is_valid(self) -> None:
+        """Multi-field specimens pass averages per field, e.g. 3.5."""
+        result = generate_smart_diagnosis({"crystals": 3.5})
+        assert isinstance(result, SmartDiagnosisOutput)
+
+    @pytest.mark.parametrize("value", [float("nan"), float("inf"), True])
+    def test_nan_inf_and_bool_raise_rule_engine_error(self, value: Any) -> None:
         with pytest.raises(RuleEngineError) as exc_info:
-            generate_smart_diagnosis({"crystals": 3.5})  # type: ignore[dict-item]
+            generate_smart_diagnosis({"crystals": value})
+        assert exc_info.value.code == "INVALID_CLASSIFICATION"
+
+    def test_negative_float_raises_rule_engine_error(self) -> None:
+        with pytest.raises(RuleEngineError) as exc_info:
+            generate_smart_diagnosis({"crystals": -0.1})
         assert exc_info.value.code == "INVALID_CLASSIFICATION"
 
     def test_string_value_raises_rule_engine_error(self) -> None:
