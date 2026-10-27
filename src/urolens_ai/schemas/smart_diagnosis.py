@@ -80,16 +80,17 @@ class EvidenceItem(BaseModel):
             "portal screens. Example: 'Uric Acid Crystals'."
         ),
     )
-    detected_count: int = Field(
+    detected_count: float = Field(
         ...,
         ge=0,
         description=(
             "Number of this particle type confirmed in the MedTech's "
-            "classification (post-override). This is the count that drove "
+            "classification (post-override); an average per field for "
+            "multi-field specimens. This is the count that drove "
             "the rule evaluation, not the raw AI detection count."
         ),
     )
-    normal_range_max: int = Field(
+    normal_range_max: float = Field(
         ...,
         ge=0,
         description=(

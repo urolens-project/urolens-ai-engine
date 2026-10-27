@@ -67,15 +67,15 @@ def _load_config() -> dict[str, Any]:
 
 
 def run_rule_engine(
-    classification: dict[str, int],
+    classification: dict[str, float],
 ) -> SmartDiagnosisOutput:
     """
     Apply all three condition rules to a particle classification.
 
     Parameters
     ----------
-    classification : dict[str, int]
-        Particle names mapped to confirmed counts.
+    classification : dict[str, float]
+        Particle names mapped to confirmed counts (averages per field allowed).
         Missing keys are treated as 0. Unknown keys are ignored.
 
     Returns

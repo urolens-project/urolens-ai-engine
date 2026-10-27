@@ -8,7 +8,8 @@ Aggregates detections by class name, filters by confidence threshold, and
 produces the particles and confidence_scores dicts for InferenceResult.
 
 Public functions:
-    map_detections(detections)  — aggregates Detection list into particle counts
+    map_detections(detections)       — aggregates Detection list into particle counts
+    to_output_detections(detections) — converts detections to the public box schema
 """
 
 from __future__ import annotations
@@ -16,9 +17,21 @@ from __future__ import annotations
 from collections import defaultdict
 
 from urolens_ai.inference.yolo_engine import Detection
+from urolens_ai.schemas.inference import Detection as DetectionOutput
 from urolens_ai.utils.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+def particle_name(class_name: str) -> str:
+    """
+    Convert a model class name to the particle key used in every output.
+
+    labels.txt uses dashes ("urinary-casts"); the particles dict, the boxes and
+    the rule config all use underscores ("urinary_casts"). Converting here, and
+    only here, keeps counts and boxes keyed identically.
+    """
+    return class_name.replace("-", "_")
 
 
 def map_detections(
@@ -60,9 +73,9 @@ def map_detections(
     confidences: dict[str, list[float]] = defaultdict(list)
 
     for detection in detections:
-        particle_name = detection.class_name.replace("-", "_")
-        counts[particle_name] += 1
-        confidences[particle_name].append(detection.confidence)
+        name = particle_name(detection.class_name)
+        counts[name] += 1
+        confidences[name].append(detection.confidence)
 
     # Compute mean confidence per class
     particles: dict[str, int] = dict(counts)
@@ -80,3 +93,30 @@ def map_detections(
     )
 
     return particles, confidence_scores
+
+def to_output_detections(detections: list[Detection]) -> list[DetectionOutput]:
+    """
+    Convert engine detections to the public Detection schema.
+
+    Parameters
+    ----------
+    detections : list[Detection]
+        The same list passed to map_detections(), so every box here is
+        counted in particles and vice versa.
+
+    Returns
+    -------
+    list[DetectionOutput]
+        One item per detection, in the engine's order, with class_name
+        converted by particle_name() and bbox as [x1, y1, x2, y2] in pixels
+        of the upright (EXIF-rotated) image.
+    """
+    return [
+        DetectionOutput(
+            class_id=detection.class_id,
+            class_name=particle_name(detection.class_name),
+            confidence=detection.confidence,
+            bbox=list(detection.bbox),
+        )
+        for detection in detections
+    ]

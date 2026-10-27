@@ -37,9 +37,10 @@ class MatchedParticle:
         Internal particle key matching config.yaml and labels.txt.
     display_name : str
         Human-readable label for evidence attribution UI.
-    detected_count : int
-        Confirmed particle count from the MedTech classification.
-    normal_range_max : int
+    detected_count : float
+        Confirmed particle count from the MedTech classification; an average
+        per field for multi-field specimens.
+    normal_range_max : float
         Upper bound of normal range from config.yaml.
     weight : float
         Per-particle weight from config.yaml.
@@ -49,8 +50,8 @@ class MatchedParticle:
 
     name: str
     display_name: str
-    detected_count: int
-    normal_range_max: int
+    detected_count: float
+    normal_range_max: float
     weight: float
     contribution: float
 
@@ -101,14 +102,14 @@ class GoutRules:
         self.thresholds: dict[str, Any] = config["thresholds"]
         self.evidence_min_count: int = config["evidence_min_count"]
 
-    def evaluate(self, classification: dict[str, int]) -> RuleResult:
+    def evaluate(self, classification: dict[str, float]) -> RuleResult:
         """
         Evaluate particle counts against Gout rules.
 
         Parameters
         ----------
-        classification : dict[str, int]
-            Particle names mapped to confirmed counts.
+        classification : dict[str, float]
+            Particle names mapped to confirmed counts (averages per field allowed).
             Missing keys are treated as count = 0.
 
         Returns
@@ -123,8 +124,8 @@ class GoutRules:
         for particle_name, particle_config in self.particles.items():
             particle_name: str
             particle_config: dict[str, Any]
-            detected_count: int = classification.get(particle_name, 0)
-            normal_max: int = particle_config["normal_range_max"]
+            detected_count: float = classification.get(particle_name, 0)
+            normal_max: float = particle_config["normal_range_max"]
             weight: float = particle_config["weight"]
             display_name: str = particle_config["display_name"]
 
