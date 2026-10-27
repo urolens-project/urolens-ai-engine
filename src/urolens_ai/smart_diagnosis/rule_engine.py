@@ -36,7 +36,7 @@ logger = get_logger(__name__)
 
 _CONFIG_PATH: str = os.environ.get(
     "RULE_ENGINE_CONFIG_PATH",
-    "src/urolens_ai/smart_diagnosis/config.yaml",
+    str(Path(__file__).resolve().parent / "config.yaml"),
 )
 
 

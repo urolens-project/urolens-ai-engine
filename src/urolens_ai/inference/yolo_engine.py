@@ -32,9 +32,13 @@ logger = get_logger(__name__)
 # Configuration — read from environment with safe defaults
 # ---------------------------------------------------------------------------
 
+# Defaults resolve inside the installed package, not the current directory,
+# so a pip-installed engine finds its bundled weights and thresholds.
+_MODELS_DIR = Path(__file__).resolve().parent.parent / "models"
+
 _MODEL_WEIGHTS_PATH: str = os.environ.get(
     "MODEL_WEIGHTS_PATH",
-    "src/urolens_ai/models/yolov8/best.pt",
+    str(_MODELS_DIR / "yolov8" / "best.pt"),
 )
 _INFERENCE_CONF_THRESHOLD: float = float(
     os.environ.get("INFERENCE_CONF_THRESHOLD", "0.35")
@@ -49,7 +53,7 @@ _MAX_DETECTIONS: int = int(os.environ.get("MAX_DETECTIONS", "1000"))
 # scripts/evaluate.py --sweep-per-class. Classes not listed use the global value.
 _CLASS_THRESHOLDS_PATH: str = os.environ.get(
     "CLASS_THRESHOLDS_PATH",
-    "src/urolens_ai/models/yolov8/thresholds.yaml",
+    str(_MODELS_DIR / "yolov8" / "thresholds.yaml"),
 )
 
 

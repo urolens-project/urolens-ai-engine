@@ -14,6 +14,23 @@ dependencies = [
     "pytest-cov>=4.1.0",
 ]
 
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# Weights, labels, thresholds and the rule config must ship with the package:
+# the engine loads them from inside it by default.
+[tool.setuptools.package-data]
+urolens_ai = [
+    "models/**/*.pt",
+    "models/**/*.txt",
+    "models/**/*.yaml",
+    "smart_diagnosis/config.yaml",
+]
+
 [tool.ruff]
 line-length = 88
 target-version = "py311"
