@@ -49,7 +49,7 @@ logger = get_logger(__name__)
 
 _GATE_WEIGHTS_PATH: str = os.environ.get(
     "GATE_WEIGHTS_PATH",
-    "src/urolens_ai/models/gate/gate.pt",
+    str(Path(__file__).resolve().parent.parent / "models" / "gate" / "gate.pt"),
 )
 _GATE_MIN_SLIDE_PROB: float = float(os.environ.get("GATE_MIN_SLIDE_PROB", "0.43"))
 

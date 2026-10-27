@@ -157,18 +157,22 @@ The ten classes: `bacteria`, `crystals`, `epithelial_cells`, `erythrocytes`,
 Read from the environment at import time. Changing them afterwards has no effect
 until the process restarts (or `reset_engine()` is called).
 
+Path defaults are relative to the installed `urolens_ai` package, which ships
+the weights, thresholds and rule config, so a plain `pip install` works with no
+path variables set.
+
 | Variable | Default | Notes |
 |---|---|---|
-| `MODEL_WEIGHTS_PATH` | `src/urolens_ai/models/yolov8/best.pt` | |
+| `MODEL_WEIGHTS_PATH` | `models/yolov8/best.pt` | |
 | `MODEL_VERSION` | `unknown` | Surfaced in `InferenceResult` |
 | `INFERENCE_CONF_THRESHOLD` | `0.35` | See note below |
-| `CLASS_THRESHOLDS_PATH` | `src/urolens_ai/models/yolov8/thresholds.yaml` | Per-class cut-offs; classes not listed use `INFERENCE_CONF_THRESHOLD`. See note below |
+| `CLASS_THRESHOLDS_PATH` | `models/yolov8/thresholds.yaml` | Per-class cut-offs; classes not listed use `INFERENCE_CONF_THRESHOLD`. See note below |
 | `INFERENCE_IOU_THRESHOLD` | `0.5` | NMS IoU |
 | `MAX_DETECTIONS` | `1000` | Most boxes per image. The Ultralytics default of 300 capped dense fields (~500 particles) at exactly 300 |
-| `RULE_ENGINE_CONFIG_PATH` | `src/urolens_ai/smart_diagnosis/config.yaml` | |
+| `RULE_ENGINE_CONFIG_PATH` | `smart_diagnosis/config.yaml` | |
 | `MIN_IMAGE_WIDTH` / `MIN_IMAGE_HEIGHT` | `640` / `480` | |
 | `ACCEPTED_IMAGE_FORMATS` | `JPEG,PNG` | |
-| `GATE_WEIGHTS_PATH` | `src/urolens_ai/models/gate/gate.pt` | Slide / not-slide classifier |
+| `GATE_WEIGHTS_PATH` | `models/gate/gate.pt` | Slide / not-slide classifier |
 | `GATE_MIN_SLIDE_PROB` | `0.43` | Highest cut-off that passes ≥99.9% of real test slides (`scripts/evaluate_gate.py`) |
 
 > **Confidence threshold — set this explicitly.** The code default and

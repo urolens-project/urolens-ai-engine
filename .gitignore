@@ -21,7 +21,8 @@ runs/
 # Pretrained backbones downloaded by Ultralytics at train time
 /yolo*.pt
 
-# Trained model weights ARE tracked, via Git LFS -- see .gitattributes.
+# Trained model weights ARE tracked, as plain files (not Git LFS) so that
+# `pip install git+...` ships the real weights instead of LFS pointer files.
 # The blanket *.pt ignore that used to live here silently defeated that,
 # which is why no teammate could reproduce a result from a shared checkout.
 *.pt
