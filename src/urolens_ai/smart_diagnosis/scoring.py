@@ -8,6 +8,7 @@ based on thresholds defined in config.yaml.
 
 Public functions:
     compute_level(weighted_score, low_max, high_min) -> ProbabilityLevel
+    cap_without_marker(level, matched_names, high_requires) -> ProbabilityLevel
 """
 
 from __future__ import annotations
@@ -71,3 +72,46 @@ def compute_level(
     )
 
     return level
+
+
+def cap_without_marker(
+    level: ProbabilityLevel,
+    matched_names: set[str],
+    high_requires: str | None,
+) -> ProbabilityLevel:
+    """
+    Cap HIGH at MODERATE when the condition's primary marker is absent.
+
+    Parameters
+    ----------
+    level : ProbabilityLevel
+        Level from compute_level().
+    matched_names : set[str]
+        Names of particles that exceeded their normal range.
+    high_requires : str | None
+        Particle that must exceed its normal range for HIGH.
+        Sourced from config.yaml high_requires. None disables the cap.
+
+    Returns
+    -------
+    ProbabilityLevel
+        MODERATE if level is HIGH and high_requires is not in matched_names,
+        otherwise level unchanged.
+
+    Notes
+    -----
+    - Stops a non-specific particle (erythrocytes) from reaching HIGH on
+      its own through unbounded excess scoring.
+    """
+    if (
+        high_requires is None
+        or level != ProbabilityLevel.HIGH
+        or high_requires in matched_names
+    ):
+        return level
+
+    logger.debug(
+        "cap_without_marker",
+        extra={"high_requires": high_requires, "level": ProbabilityLevel.MODERATE.value},
+    )
+    return ProbabilityLevel.MODERATE

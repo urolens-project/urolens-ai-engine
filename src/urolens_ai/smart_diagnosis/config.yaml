@@ -1,5 +1,6 @@
 # UroLens Smart Diagnosis Rule Engine Configuration
-# Version: 1.0
+# Version: 1.1
+# 1.1: added high_requires for GN and nephrolithiasis — PENDING MedTech re-review
 # Status: DOMAIN EXPERT REVIEWED — Medical Technologist sign-off obtained
 #
 # Domain Expert Review:
@@ -21,6 +22,10 @@
 #   weighted_score <= low_max_score  -> LOW
 #   weighted_score >= high_min_score -> HIGH
 #   between                          -> MODERATE
+#
+# high_requires (optional):
+#   Particle that must exceed its normal range for HIGH. Without it, HIGH is
+#   capped at MODERATE, so non-specific hematuria alone cannot reach HIGH.
 #
 # evidence_min_count:
 #   Minimum detected_count for a particle to appear in the evidence list.
@@ -89,6 +94,9 @@ conditions:
       high_min_score: 35.0
       # Raised from 5.0 per MedTech review — HIGH only for very significant findings.
 
+    high_requires: urinary_casts
+    # v1.1: without casts, erythrocytes alone reached HIGH at 179+ per field.
+
     evidence_min_count: 1
 
   # ---------------------------------------------------------------------------
@@ -125,6 +133,9 @@ conditions:
       # Raised significantly from 8.0 per MedTech review — HIGH is very
       # difficult to reach, reflecting low diagnostic confidence from
       # urinalysis alone.
+
+    high_requires: crystals
+    # v1.1: without crystals, erythrocytes alone reached HIGH at 354+ per field.
 
     evidence_min_count: 2
 

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import pytest
 
+from urolens_ai.schemas.smart_diagnosis import ProbabilityLevel
 from urolens_ai.smart_diagnosis import rule_engine
 from urolens_ai.smart_diagnosis.rule_engine import run_rule_engine
 from urolens_ai.smart_diagnosis.rules.gout import RuleResult
@@ -64,3 +65,17 @@ class TestRuleEvaluationFailed:
             run_rule_engine({"crystals": 5})
         assert exc_info.value.code == "RULE_EVALUATION_FAILED"
         assert "simulated rule crash" in exc_info.value.message
+
+
+class TestErythrocytesAloneCannotReachHigh:
+    """Shipped config: hematuria alone must not produce HIGH for GN or nephrolithiasis."""
+
+    def test_erythrocytes_only_capped_at_moderate(self) -> None:
+        result = run_rule_engine({"erythrocytes": 359})
+        assert result.glomerulonephritis.level == ProbabilityLevel.MODERATE
+        assert result.nephrolithiasis.level == ProbabilityLevel.MODERATE
+
+    def test_markers_present_allow_high(self) -> None:
+        result = run_rule_engine({"erythrocytes": 359, "urinary_casts": 1, "crystals": 6})
+        assert result.glomerulonephritis.level == ProbabilityLevel.HIGH
+        assert result.nephrolithiasis.level == ProbabilityLevel.HIGH

@@ -28,7 +28,7 @@ from urolens_ai.smart_diagnosis.evidence import build_attribution
 from urolens_ai.smart_diagnosis.rules.glomerulonephritis import GlomerulonephritisRules
 from urolens_ai.smart_diagnosis.rules.gout import GoutRules
 from urolens_ai.smart_diagnosis.rules.nephrolithiasis import NephrolithiasisRules
-from urolens_ai.smart_diagnosis.scoring import compute_level
+from urolens_ai.smart_diagnosis.scoring import cap_without_marker, compute_level
 from urolens_ai.utils.exceptions import RuleEngineError
 from urolens_ai.utils.logging import get_logger
 
@@ -121,6 +121,18 @@ def run_rule_engine(
             nephro_result.weighted_score,
             conditions["nephrolithiasis"]["thresholds"]["low_max_score"],
             conditions["nephrolithiasis"]["thresholds"]["high_min_score"],
+        )
+
+        # HIGH requires each condition's primary marker, not erythrocytes alone
+        gn_level = cap_without_marker(
+            gn_level,
+            {p.name for p in gn_result.matched_particles},
+            conditions["glomerulonephritis"].get("high_requires"),
+        )
+        nephro_level = cap_without_marker(
+            nephro_level,
+            {p.name for p in nephro_result.matched_particles},
+            conditions["nephrolithiasis"].get("high_requires"),
         )
 
         # Build evidence attribution
