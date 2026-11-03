@@ -10,7 +10,7 @@ Coverage target: >= 90% branch coverage on scoring.py
 from __future__ import annotations
 
 from urolens_ai.schemas.smart_diagnosis import ProbabilityLevel
-from urolens_ai.smart_diagnosis.scoring import compute_level
+from urolens_ai.smart_diagnosis.scoring import cap_without_marker, compute_level
 
 
 class TestComputeLevelBoundaries:
@@ -80,3 +80,27 @@ class TestComputeLevelReturnType:
         """Nephrolithiasis thresholds (3.0/15.0) — score 1.5 must return LOW."""
         result = compute_level(1.5, low_max=3.0, high_min=15.0)
         assert result == ProbabilityLevel.LOW
+
+
+class TestCapWithoutMarker:
+    def test_high_without_marker_capped_to_moderate(self) -> None:
+        """HIGH with the required marker absent must return MODERATE."""
+        result = cap_without_marker(ProbabilityLevel.HIGH, {"erythrocytes"}, "urinary_casts")
+        assert result == ProbabilityLevel.MODERATE
+
+    def test_high_with_marker_stays_high(self) -> None:
+        """HIGH with the required marker present must stay HIGH."""
+        result = cap_without_marker(
+            ProbabilityLevel.HIGH, {"erythrocytes", "urinary_casts"}, "urinary_casts"
+        )
+        assert result == ProbabilityLevel.HIGH
+
+    def test_no_requirement_leaves_high(self) -> None:
+        """high_requires=None must leave HIGH unchanged."""
+        result = cap_without_marker(ProbabilityLevel.HIGH, set(), None)
+        assert result == ProbabilityLevel.HIGH
+
+    def test_moderate_and_low_unchanged(self) -> None:
+        """Levels below HIGH must pass through unchanged."""
+        assert cap_without_marker(ProbabilityLevel.MODERATE, set(), "crystals") == ProbabilityLevel.MODERATE
+        assert cap_without_marker(ProbabilityLevel.LOW, set(), "crystals") == ProbabilityLevel.LOW

@@ -71,6 +71,13 @@ weighted_score >= high_min_score  -> HIGH
 between                           -> MODERATE
 ```
 
+If a condition sets `high_requires`, HIGH is capped at MODERATE unless that
+particle exceeds its normal range. Glomerulonephritis requires `urinary_casts`;
+Nephrolithiasis requires `crystals`. Without this cap, erythrocytes alone reached
+HIGH for both (179+ per field for GN, 354+ for nephrolithiasis), even though
+hematuria is non-specific for either. Added in config v1.1, pending MedTech
+re-review.
+
 ### 4.3 Threshold Values
 
 > **`src/urolens_ai/smart_diagnosis/config.yaml` is the single source of truth.**
