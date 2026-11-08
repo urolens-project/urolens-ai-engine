@@ -1,0 +1,13 @@
+# Per-class confidence thresholds, chosen by scripts/evaluate.py --sweep-per-class on the valid split.
+# Re-run whenever the model weights change.
+per_class:
+  bacteria: 0.15
+  crystals: 0.35
+  epithelial-cells: 0.55
+  erythrocytes: 0.35
+  leukocytes: 0.5
+  mucus-threads: 0.1
+  sperm-cells: 0.3
+  trichomonas-vaginalis: 0.35
+  urinary-casts: 0.35
+  yeast: 0.4

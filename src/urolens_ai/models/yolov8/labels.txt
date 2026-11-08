@@ -1,0 +1,10 @@
+bacteria
+crystals
+epithelial-cells
+erythrocytes
+leukocytes
+mucus-threads
+sperm-cells
+trichomonas-vaginalis
+urinary-casts
+yeast

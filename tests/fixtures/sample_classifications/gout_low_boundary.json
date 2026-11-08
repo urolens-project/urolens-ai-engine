@@ -1,0 +1,49 @@
+{
+    "_description": "Crystals slightly elevated. Score = (7-5)*1.0 = 2.0, which equals low_max_score(2.0) — returns LOW per inclusive boundary rule (score <= low_max => LOW). Validates that score == low_max resolves to LOW, not MODERATE. evidence list present because crystals=7 >= evidence_min_count=2 and score > 0.",
+    "_expected": {
+        "gout": {
+            "level": "LOW",
+            "weighted_score": 2.0,
+            "evidence": [
+                {
+                    "particle_name": "crystals",
+                    "detected_count": 7,
+                    "normal_range_max": 5,
+                    "contribution_weight": 1.0,
+                    "contribution_score": 2.0,
+                    "contribution_role": "primary"
+                }
+            ]
+        },
+        "glomerulonephritis": {
+            "level": "LOW",
+            "weighted_score": 0.0,
+            "evidence": []
+        },
+        "nephrolithiasis": {
+            "level": "LOW",
+            "weighted_score": 0.6000000000000001,
+            "evidence": [
+                {
+                    "particle_name": "crystals",
+                    "detected_count": 7,
+                    "normal_range_max": 5,
+                    "contribution_weight": 0.3,
+                    "contribution_score": 0.6000000000000001,
+                    "contribution_role": "primary"
+                }
+            ]
+        },
+        "no_significant_indicators": false
+    },
+    "_score_derivation": {
+        "gout": "crystals: (7-5)*1.0 = 2.0 == low_max_score(2.0) => LOW (inclusive boundary)",
+        "glomerulonephritis": "no particles exceed normal range",
+        "nephrolithiasis": "crystals: (7-5)*0.3 = 0.6 — below low_max(3.0) => LOW"
+    },
+    "classification": {
+        "crystals": 7,
+        "erythrocytes": 0,
+        "urinary_casts": 0
+    }
+}

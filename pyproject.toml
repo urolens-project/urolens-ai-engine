@@ -1,0 +1,45 @@
+[project]
+name = "urolens-ai-engine"
+version = "0.2.1"
+requires-python = ">=3.11"
+dependencies = [
+    "ultralytics>=8.0.0",
+    "torch>=2.0.0",
+    "torchvision>=0.15.0",
+    "Pillow>=10.0.0",
+    "pydantic>=2.0.0",
+    "pyyaml>=6.0.0",
+    "numpy>=1.26.0",
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# Weights, labels, thresholds and the rule config must ship with the package:
+# the engine loads them from inside it by default.
+[tool.setuptools.package-data]
+urolens_ai = [
+    "models/**/*.pt",
+    "models/**/*.txt",
+    "models/**/*.yaml",
+    "smart_diagnosis/config.yaml",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["integration: marks tests as integration tests"]

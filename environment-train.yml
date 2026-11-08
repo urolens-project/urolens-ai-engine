@@ -1,0 +1,53 @@
+# environment-train.yml
+# ---------------------
+# The environment that can actually TRAIN the UroLens detector.
+#
+# This exists because the repository has two Python environments that look
+# interchangeable and are not:
+#
+#   .venv                (requirements.txt)  torch 2.12.0+cpu   -- inference, tests
+#   conda: yolo-urinalysis (this file)       torch 2.7.1+cu118  -- training
+#
+# The repo .venv carries a CPU-only torch wheel. Training in it does not fail --
+# it silently runs on CPU, turning a ~9 hour run into a multi-week one. That is
+# why scripts/train.py refuses to start without CUDA unless --allow-cpu is passed.
+#
+# Create or update:
+#     conda env create -f environment-train.yml
+#     conda env update -f environment-train.yml --prune
+#
+# Then train:
+#     conda run -n yolo-urinalysis python scripts/train.py \
+#         --data C:/Users/Harley/UroLens/UroLens-4-clean/data.yaml
+#
+# The CUDA build must match the installed driver. Verified on an RTX 4060 Laptop
+# GPU (8 GB, driver 591.86). torch is installed from the cu118 index rather than
+# PyPI, because the default PyPI wheel on Windows is CPU-only.
+
+name: yolo-urinalysis
+
+channels:
+  - conda-forge
+
+dependencies:
+  - python=3.10
+  - pip
+  - pip:
+      # CUDA build -- the index URL is the load-bearing part of this file.
+      - --extra-index-url https://download.pytorch.org/whl/cu118
+      - torch==2.7.1+cu118
+      - torchvision==0.22.1+cu118
+
+      # Training and evaluation
+      - ultralytics==8.4.53
+      - numpy==2.2.6
+      - scipy==1.15.3
+      - pillow==12.2.0
+      - opencv-python==4.13.0.92
+      - matplotlib==3.10.9
+
+      # Needed by scripts/evaluate.py, which imports the real rule engine from
+      # src/urolens_ai so the diagnosis-agreement numbers come from production
+      # code rather than a reimplementation.
+      - pydantic==2.13.5
+      - PyYAML==6.0.3
