@@ -1,6 +1,6 @@
 [project]
 name = "urolens-ai-engine"
-version = "0.2.1"
+version = "1.0.0"
 requires-python = ">=3.11"
 dependencies = [
     "ultralytics>=8.0.0",
